@@ -1,0 +1,10 @@
+[
+  {
+    "parent_keys": ["PLAYG-1237", "PLAYG-1230"],
+    "summary": "[Classification] PLAYG-1230 CBCT Viewer 소프트웨어 안전 등급 분석",
+    "rules": "Rule 11 (SW 전용 규칙)",
+    "rationale": "본 소프트웨어(CBCT Viewer)는 로컬 DICOM CBCT 영상을 웹 브라우저에서 불러와 축상/관상/시상 단면 및 3D 볼륨 렌더링을 디스플레이하는 영상 조회 소프트웨어임. PLAYG-1237(Intended Use)에 명시된 바와 같이 (1) Intended Purpose: 진단 목적이 아닌 영상 확인 및 검토용, (2) User Constraint: 영상 확인 전용 뷰어로 독립적 진단에 사용 불가, (3) Part of Body: 해당 없음(소프트웨어 전용 제품으로 환자 신체와 직접적 접촉이 없음), (4) Warnings and Precautions: 진단 보조 도구가 아닌 영상 확인 전용으로 명시됨. 시스템 요구사항(SyRS) 12건 모두 영상 로드, 렌더링, 탐색, 확대/축소, 윈도우 레벨 조절, 거리 측정, 오프라인 동작, 브라우저 호환성, 경고 표시, 개인정보 보호, 3D 렌더링, 메타데이터 표시 등 영상 시각화 기능에 국한됨. 현재 Hazard 티켓이 생성되지 않았으나, 식별 가능한 최악의 위해 시나리오(영상 왜곡, 거리 측정 오류, 메타데이터 오표시 등)를 고려하더라도 본 소프트웨어는 진단 결정에 사용되지 않으므로 환자에게 사망이나 심각한 부상(Serious injury)의 가능성이 없음. IEC 62304 기준 Class A(안전)로 분석됨. EU MDR Rule 11(소프트웨어 전용 규칙) 적용 시, 진단/치료 결정에 영향을 주지 않는 영상 확인 전용 소프트웨어이므로 Class I에 해당함.",
+    "software_safety_class": "Class A (안전)",
+    "final_class": "Class I"
+  }
+]
