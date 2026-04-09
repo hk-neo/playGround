@@ -6,108 +6,31 @@
     ],
     "SyRS-01": "[SyRS] DICOM 파일 로드",
     "SyRS-02": "Functional",
-    "SyRS-03": "근거: PLAYG-1237 (Intended Purpose, Principle of Operation, Key Performance Spec), IU-08 작동 원리\n\n- 입력: 사용자가 로컬 파일 시스템에서 선택한 DICOM 3.0 CBCT 파일(.dcm) 또는 DICOM 폴더\n- 처리: JavaScript 기반 DICOM 파서를 통해 헤더 메타데이터와 픽셀 데이터 해석\n- 출력: 렌더링 가능한 3D 볼륨 데이터 구성 완료",
-    "SyRS-04": "사용자가 로컬 파일 또는 폴더를 선택하여 DICOM 3.0 CBCT 영상을 웹 브라우저에 로드할 수 있어야 한다. 파일 선택 대화상자 및 Drag & Drop 방식을 모두 지원해야 한다.",
-    "SyRS-05": "DICOM 3.0 표준 준수 파일의 로드 성공률 99% 이상. 파일 로드 후 10초 이내에 메타데이터 파싱 완료."
+    "SyRS-03": "근거: PLAYG-1237 Intended Purpose, IU-08 작동 원리\n\n- 입력: 사용자가 로컬 파일 시스템에서 선택한 DICOM 파일(.dcm) 또는 DICOM 파일이 포함된 폴더\n- 처리: 웹 브라우저 파일 API를 통해 파일 데이터를 읽어 들임\n- 출력: 파싱 가능한 DICOM 데이터 스트림 확보",
+    "SyRS-04": "사용자가 로컬 파일 시스템에서 DICOM 파일 또는 폴더를 선택하여 웹 브라우저로 불러올 수 있어야 한다. 파일 선택 대화상자와 Drag & Drop 방식을 모두 지원해야 한다.",
+    "SyRS-05": "DICOM 3.0 표준 형식의 CBCT 데이터를 로드할 수 있어야 하며, 로드 실패 시 사용자에게 에러 메시지를 표시해야 한다."
   },
   {
     "parent_keys": [
       "PLAYG-1237",
       "PLAYG-1229"
     ],
-    "SyRS-01": "[SyRS] MPR 단면 렌더링",
+    "SyRS-01": "[SyRS] DICOM 메타데이터 파싱",
     "SyRS-02": "Functional",
-    "SyRS-03": "근거: PLAYG-1237 (Key Performance Spec: 축상/관상/시상 단면 표시), IU-08 작동 원리(4단계 MPR 재구성)\n\n- 입력: 파싱된 3D 볼륨 데이터\n- 처리: 축상(Axial), 관상(Coronal), 시상(Sagittal) 단면 실시간 재구성\n- 출력: 세 방향 단면 영상을 화면에 동시 디스플레이",
-    "SyRS-04": "로드된 CBCT 볼륨 데이터로부터 축상(Axial), 관상(Coronal), 시상(Sagittal) 단면을 실시간으로 재구성하여 동시에 디스플레이해야 한다.",
-    "SyRS-05": "세 단면 모두 실시간 렌더링으로 슬라이스 전환 시 100ms 이내 응답."
+    "SyRS-03": "근거: PLAYG-1237 Principle of Operation, IU-08 작동 원리\n\n- 입력: DICOM 파일 데이터 스트림\n- 처리: DICOM 헤더 메타데이터(환자 정보, 스터디 정보, 픽셀 간격, 슬라이스 두께 등)와 픽셀 데이터를 JavaScript 기반 DICOM 파서로 해석\n- 출력: 복셀 데이터 및 메타데이터 구조체",
+    "SyRS-04": "DICOM 파일의 헤더 메타데이터와 픽셀 데이터를 파싱하여 3차원 볼륨 데이터를 구성할 수 있는 형태로 변환해야 한다. 환자 정보, 스터디 정보, 픽셀 간격, 슬라이스 두께 등의 필수 태그를 추출해야 한다.",
+    "SyRS-05": "DICOM 3.0 표준 태그를 정확히 파싱하고, 필수 메타데이터 누락 시 경고를 표시해야 한다."
   },
   {
     "parent_keys": [
       "PLAYG-1237",
       "PLAYG-1229"
     ],
-    "SyRS-01": "[SyRS] 슬라이스 탐색",
+    "SyRS-01": "[SyRS] MPR 다단면 렌더링",
     "SyRS-02": "Functional",
-    "SyRS-03": "근거: PLAYG-1237 (Key Performance Spec: 슬라이스 탐색, Principle of Operation: 슬라이스 이동)\n\n- 입력: 사용자의 마우스 휠/키보드 입력\n- 처리: 선택 단면의 슬라이스 인덱스를 증감하여 해당 단면 이미지 갱신\n- 출력: 갱신된 단면 영상 디스플레이",
-    "SyRS-04": "사용자가 마우스 휠 또는 키보드 입력을 통해 각 단면(Axial, Coronal, Sagittal)의 슬라이스 위치를 변경할 수 있어야 한다.",
-    "SyRS-05": "슬라이스 변경 시 100ms 이내에 해당 단면 영상이 갱신되어야 한다."
-  },
-  {
-    "parent_keys": [
-      "PLAYG-1237",
-      "PLAYG-1229"
-    ],
-    "SyRS-01": "[SyRS] 확대/축소 및 이동",
-    "SyRS-02": "Functional",
-    "SyRS-03": "근거: PLAYG-1237 (Key Performance Spec: Zoom/Pan, Principle of Operation: 확대/축소)\n\n- 입력: 마우스 휠(확대/축소) 및 드래그(이동) 입력\n- 처리: 뷰포트의 줌 배율 및 팬 오프셋 계산\n- 출력: 확대/축소 및 이동이 반영된 단면 영상",
-    "SyRS-04": "사용자가 마우스 휠로 영상을 확대/축소하고, 마우스 드래그로 영상을 이동(Pan)할 수 있어야 한다.",
-    "SyRS-05": "줌/팬 조작 시 100ms 이내에 화면이 갱신되어야 한다."
-  },
-  {
-    "parent_keys": [
-      "PLAYG-1237",
-      "PLAYG-1229"
-    ],
-    "SyRS-01": "[SyRS] 윈도우 레벨 조절",
-    "SyRS-02": "Functional",
-    "SyRS-03": "근거: PLAYG-1237 (Key Performance Spec: 실시간 윈도우 레벨(WL/WW) 조절, Principle of Operation: 윈도우 레벨 조절)\n\n- 입력: 사용자의 마우스/키보드 입력을 통한 Window Level(WL) 및 Window Width(WW) 값 변경\n- 처리: 변경된 WL/WW 값을 기반으로 픽셀-밝기 매핑 재계산\n- 출력: 조정된 명암의 단면 영상",
-    "SyRS-04": "사용자가 실시간으로 Window Level(WL)과 Window Width(WW) 값을 조절하여 영상의 명암을 변경할 수 있어야 한다.",
-    "SyRS-05": "WL/WW 조절 시 100ms 이내에 영상이 갱신되어야 한다."
-  },
-  {
-    "parent_keys": [
-      "PLAYG-1237",
-      "PLAYG-1229"
-    ],
-    "SyRS-01": "[SyRS] 거리 측정",
-    "SyRS-02": "Functional",
-    "SyRS-03": "근거: PLAYG-1237 (Key Performance Spec: 거리 측정 mm 단위, 픽셀 간격 기반)\n\n- 입력: 사용자의 마우스 클릭으로 지정한 두 점\n- 처리: DICOM 메타데이터의 픽셀 간격(Pixel Spacing) 값을 활용하여 두 점 사이의 물리적 거리 계산\n- 출력: mm 단위 거리 측정값 화면 표시",
-    "SyRS-04": "사용자가 영상 상에 두 점을 지정하여 mm 단위의 거리를 측정할 수 있어야 한다. 측정선과 수치가 화면에 표시되어야 한다.",
-    "SyRS-05": "측정 오차는 픽셀 간격 기준 1픽셀 이내여야 한다."
-  },
-  {
-    "parent_keys": [
-      "PLAYG-1237",
-      "PLAYG-1229"
-    ],
-    "SyRS-01": "[SyRS] 오프라인 동작",
-    "SyRS-02": "Performance",
-    "SyRS-03": "근거: PLAYG-1237 (Use Environment: 네트워크 불필요, 로컬 독립 동작; Key Performance Spec: 오프라인 동작 가능)\n\n- 입력: 없음 (환경 조건)\n- 처리: 모든 영상 로드, 파싱, 렌더링, 사용자 인터랙션이 로컬 브라우저 내에서만 수행\n- 출력: 네트워크 연결 없이 전체 기능 동작",
-    "SyRS-04": "소프트웨어는 인터넷 연결 없이 로컬 환경에서 완전하게 동작해야 한다. 모든 영상 로딩, 렌더링, 인터랙션 기능이 오프라인 상태에서 정상 작동해야 한다.",
-    "SyRS-05": "네트워크 연결 완전 차단 상태에서 모든 핵심 기능(로드, 렌더링, 탐색, 측정)이 정상 동작해야 한다."
-  },
-  {
-    "parent_keys": [
-      "PLAYG-1237",
-      "PLAYG-1229"
-    ],
-    "SyRS-01": "[SyRS] 웹 브라우저 호환성",
-    "SyRS-02": "Interface",
-    "SyRS-03": "근거: PLAYG-1237 (Use Environment: 인터넷 브라우저가 설치된 데스크탑/노트북; Key Performance Spec: Chrome, Edge, Firefox 지원)\n\n- 입력: 브라우저 환경 정보\n- 처리: HTML5 Canvas/WebGL 기반 렌더링 엔진 동작\n- 출력: 지원 브라우저에서 동일한 UI/UX 제공",
-    "SyRS-04": "최신 버전의 Chrome, Edge, Firefox 웹 브라우저에서 정상 동작해야 한다. 별도의 플러그인이나 소프트웨어 설치 없이 브라우저만으로 실행 가능해야 한다.",
-    "SyRS-05": "지원하는 세 브라우저의 최신 버전에서 모든 핵심 기능이 정상 동작해야 한다."
-  },
-  {
-    "parent_keys": [
-      "PLAYG-1237",
-      "PLAYG-1229"
-    ],
-    "SyRS-01": "[SyRS] 사용자 제약 및 경고 표시",
-    "SyRS-02": "Regulatory",
-    "SyRS-03": "근거: PLAYG-1237 (User Constraint: 영상 확인 전용 뷰어로 독립적 진단에 사용 불가; Warnings and Precautions: 단독 진단 도구가 아님)\n\n- 입력: 없음 (표시 조건)\n- 처리: 소프트웨어 구동 시 사용 제약 문구를 항상 표시\n- 출력: 화면 상에 진단 목적 불가 경고 문구 표시",
-    "SyRS-04": "소프트웨어 실행 시 본 제품이 진단 목적이 아닌 영상 확인 전용임을 사용자에게 명확히 표시해야 한다. 경고 문구는 사용자가 쉽게 인지할 수 있는 위치에 항상 표시되어야 한다.",
-    "SyRS-05": "애플리케이션 실행 시 메인 화면에 진단 불가 경고 문구가 항상 표시되어야 한다."
-  },
-  {
-    "parent_keys": [
-      "PLAYG-1237",
-      "PLAYG-1229"
-    ],
-    "SyRS-01": "[SyRS] 환자 개인정보 보호",
-    "SyRS-02": "Security",
-    "SyRS-03": "근거: PLAYG-1237 (Warnings and Precautions: 환자 개인정보 보호 유의; Clinical Benefit: 로컬 동작으로 외부 전송 최소화)\n\n- 입력: DICOM 파일 내 환자 식별 정보(PHI)\n- 처리: 로컬 브라우저 내에서만 데이터 처리, 외부 전송 금지\n- 출력: 환자 데이터의 외부 유출 차단",
-    "SyRS-04": "DICOM 파일에 포함된 환자 식별 정보(PHI)는 로컬 브라우저 내에서만 처리되어야 하며, 외부 서버로의 전송이 발생하지 않아야 한다.",
-    "SyRS-05": "네트워크 모니터링 시 환자 데이터의 외부 전송이 0건이어야 한다."
+    "SyRS-03": "근거: PLAYG-1237 Indication, IU-03 적응증, Key Performance Spec\n\n- 입력: 3차원 볼륨 데이터\n- 처리: 축상(Axial), 관상(Coronal), 시상(Sagittal) 단면을 실시간 재구성\n- 출력: 세 방향 MPR 영상을 화면에 동시 디스플레이",
+    "SyRS-04": "3차원 볼륨 데이터로부터 축상(Axial), 관상(Coronal), 시상(Sagittal) 단면 영상을 실시간으로 재구성하여 세 단면을 동시에 디스플레이해야 한다.",
+    "SyRS-05": "세 단면(Axial, Sagittal, Coronal)이 동시에 표시되어야 하며, 한 단면에서의 슬라이스 이동 시 교차점이 다른 단면에 실시간 반영되어야 한다."
   },
   {
     "parent_keys": [
@@ -116,19 +39,118 @@
     ],
     "SyRS-01": "[SyRS] 3D 볼륨 렌더링",
     "SyRS-02": "Functional",
-    "SyRS-03": "근거: PLAYG-1237 (Intended Purpose: 3D 볼륨 렌더링 디스플레이; IU-08 작동 원리: HTML5 Canvas/WebGL 렌더링)\n\n- 입력: 파싱된 3D 볼륨 데이터\n- 처리: WebGL 기반 볼륨 렌더링 알고리즘 적용\n- 출력: 3D 볼륨 렌더링 영상 디스플레이",
-    "SyRS-04": "로드된 CBCT 볼륨 데이터를 WebGL을 활용하여 3D 볼륨 렌더링으로 디스플레이할 수 있어야 한다. 사용자는 마우스 입력으로 3D 영상을 회전할 수 있어야 한다.",
-    "SyRS-05": "3D 렌더링 프레임 레이트가 상호작용 시 최소 15fps 이상 유지되어야 한다."
+    "SyRS-03": "근거: PLAYG-1237 Intended Purpose, IU-02 의도된 목적\n\n- 입력: 3차원 복셀 데이터\n- 처리: WebGL 기반 3D 볼륨 렌더링\n- 출력: 회전 가능한 3D 영상 뷰",
+    "SyRS-04": "복셀 데이터를 활용하여 3D 볼륨 렌더링을 수행하고, 사용자가 마우스를 통해 회전 및 방향 전환이 가능한 3D 영상 뷰를 제공해야 한다.",
+    "SyRS-05": "3D 볼륨 렌더링이 사용자 조작에 대해 실시간으로 응답해야 한다."
   },
   {
     "parent_keys": [
       "PLAYG-1237",
       "PLAYG-1229"
     ],
-    "SyRS-01": "[SyRS] DICOM 메타데이터 표시",
+    "SyRS-01": "[SyRS] 슬라이스 탐색",
+    "SyRS-02": "Functional",
+    "SyRS-03": "근거: PLAYG-1237 Principle of Operation, IU-08 작동 원리, Key Performance Spec\n\n- 입력: 사용자 마우스/키보드 입력\n- 처리: 슬라이스 인덱스 변경\n- 출력: 해당 슬라이스 위치의 단면 영상 갱신",
+    "SyRS-04": "사용자가 마우스 휠, 슬라이더, 또는 키보드를 통해 각 단면의 슬라이스 위치를 이동할 수 있어야 한다.",
+    "SyRS-05": "슬라이스 이동 시 해당 단면 영상이 지연 없이 갱신되어야 한다."
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1237",
+      "PLAYG-1229"
+    ],
+    "SyRS-01": "[SyRS] 확대/축소 및 이동",
+    "SyRS-02": "Functional",
+    "SyRS-03": "근거: PLAYG-1237 Key Performance Spec, IU-10 성능 사양\n\n- 입력: 마우스 드래그(이동), 마우스 휠/버튼(확대/축소)\n- 처리: 뷰 변환 행렬 적용\n- 출력: 확대/축소 및 이동된 영상",
+    "SyRS-04": "사용자가 마우스 드래그로 영상을 이동(Pan)하고, 마우스 휠 또는 버튼으로 영상을 확대/축소(Zoom)할 수 있어야 한다.",
+    "SyRS-05": "Zoom/Pan 조작이 실시간으로 반영되어야 하며, 원래 비율로 리셋하는 기능을 제공해야 한다."
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1237",
+      "PLAYG-1229"
+    ],
+    "SyRS-01": "[SyRS] 윈도우 레벨 조절",
+    "SyRS-02": "Functional",
+    "SyRS-03": "근거: PLAYG-1237 Principle of Operation, Key Performance Spec\n\n- 입력: 사용자 마우스 드래그(WL/WW 조절)\n- 처리: 픽셀 값 매핑 범위 변경\n- 출력: 명암이 조절된 영상",
+    "SyRS-04": "사용자가 윈도우 레벨(WL)과 윈도우 폭(WW)을 실시간으로 조절할 수 있어야 한다. 기본 프리셋(뼈, 연조직 등)을 제공해야 한다.",
+    "SyRS-05": "WL/WW 조절 시 영상의 명암이 지연 없이 실시간 갱신되어야 한다."
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1237",
+      "PLAYG-1229"
+    ],
+    "SyRS-01": "[SyRS] 거리 측정",
+    "SyRS-02": "Functional",
+    "SyRS-03": "근거: PLAYG-1237 Key Performance Spec, IU-10 성능 사양\n\n- 입력: 사용자가 영상 상에 두 점을 지정\n- 처리: 픽셀 간격(Pixel Spacing) 메타데이터 기반 거리 계산\n- 출력: mm 단위 거리 표시",
+    "SyRS-04": "사용자가 영상 상에 두 점을 클릭하여 거리를 측정할 수 있어야 하며, DICOM 메타데이터의 픽셀 간격(Pixel Spacing) 값을 기반으로 mm 단위로 결과를 표시해야 한다.",
+    "SyRS-05": "측정 오차가 픽셀 간격 정밀도 내에서 정확해야 하며, 측정선과 수치가 영상 위에 표시되어야 한다."
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1237",
+      "PLAYG-1229"
+    ],
+    "SyRS-01": "[SyRS] 오프라인 로컬 동작",
+    "SyRS-02": "Performance",
+    "SyRS-03": "근거: PLAYG-1237 Use Environment, IU-07 사용 환경\n\n- 입력: 없음 (환경 요구사항)\n- 처리: 네트워크 연결 없이 모든 기능 동작\n- 출력: 인터넷 불필요한 독립 동작",
+    "SyRS-04": "소프트웨어는 인터넷 연결 없이도 모든 영상 열람 기능이 완전히 동작해야 한다. 서버 통신이나 외부 API 호출에 의존하지 않아야 한다.",
+    "SyRS-05": "네트워크 연결이 완전히 차단된 환경에서도 파일 로드, 렌더링, 측정 등 모든 기능이 정상 동작해야 한다."
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1237",
+      "PLAYG-1229"
+    ],
+    "SyRS-01": "[SyRS] 웹 브라우저 호환성",
     "SyRS-02": "Interface",
-    "SyRS-03": "근거: PLAYG-1237 (Principle of Operation: DICOM 파일 헤더 메타데이터 해석; Key Performance Spec: DICOM 3.0 CBCT 영상 지원)\n\n- 입력: DICOM 파일 헤더 메타데이터\n- 처리: 환자 정보, 촬영 정보, 영상 파라미터 등 추출\n- 출력: 주요 메타데이터를 사용자에게 화면에 표시",
-    "SyRS-04": "로드된 DICOM 파일의 주요 메타데이터(환자 ID, 촬영일, 영상 크기, 픽셀 간격, 모달리티 등)를 사용자가 확인할 수 있어야 한다.",
-    "SyRS-05": "파일 로드 완료 후 1초 이내에 메타데이터 패널에 정보가 표시되어야 한다."
+    "SyRS-03": "근거: PLAYG-1237 Use Environment, IU-07 사용 환경, Key Performance Spec\n\n- 입력: 없음 (환경 요구사항)\n- 처리: 최신 웹 브라우저에서 정상 동작\n- 출력: Chrome, Edge, Firefox 지원",
+    "SyRS-04": "최신 버전의 Chrome, Edge, Firefox 웹 브라우저에서 정상 동작해야 한다. 별도의 플러그인이나 소프트웨어 설치 없이 브라우저만으로 실행 가능해야 한다.",
+    "SyRS-05": "지원 브라우저 최신 버전에서 모든 기능이 정상 동작해야 한다."
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1237",
+      "PLAYG-1229"
+    ],
+    "SyRS-01": "[SyRS] 환자 정보 보호",
+    "SyRS-02": "Security",
+    "SyRS-03": "근거: PLAYG-1237 Warnings and Precautions, IU-12 경고 및 주의사항, User Constraint\n\n- 입력: DICOM 파일 내 환자 식별 정보(PHI)\n- 처리: 로컬에서만 데이터 처리, 외부 전송 금지\n- 출력: 환자 데이터의 로컬 한정 처리",
+    "SyRS-04": "환자 식별 정보(PHI)가 포함된 DICOM 파일을 열람할 때 모든 데이터는 로컬에서만 처리되어야 하며, 외부 서버로의 데이터 전송이 발생하지 않아야 한다. 환자 개인정보 보호 규정을 준수해야 한다.",
+    "SyRS-05": "소프트웨어 동작 중 외부 네트워크로 환자 데이터가 전송되지 않아야 한다."
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1237",
+      "PLAYG-1229"
+    ],
+    "SyRS-01": "[SyRS] DICOM 3.0 표준 준수",
+    "SyRS-02": "Regulatory",
+    "SyRS-03": "근거: PLAYG-1237 Key Performance Spec, IU-10 성능 사양, User Constraint\n\n- 입력: DICOM 3.0 표준 CBCT 데이터\n- 처리: 표준 준수 파싱 및 렌더링\n- 출력: 표준 호환 영상 표시",
+    "SyRS-04": "DICOM 3.0 표준 형식의 CBCT 영상 데이터를 지원해야 한다. 비표준 또는 손상된 DICOM 파일에 대해서는 사용자에게 적절한 경고 메시지를 표시해야 한다.",
+    "SyRS-05": "DICOM 3.0 표준을 준수하는 CBCT 데이터의 정상 로드 및 표시 성공률이 99% 이상이어야 한다."
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1237",
+      "PLAYG-1229"
+    ],
+    "SyRS-01": "[SyRS] 영상 로드 성능",
+    "SyRS-02": "Performance",
+    "SyRS-03": "근거: PLAYG-1237 Key Performance Spec, Clinical Benefit, IU-11 임상적 이점\n\n- 입력: DICOM CBCT 영상 데이터\n- 처리: 파일 파싱 및 볼륨 구성\n- 출력: 렌더링 준비 완료 상태",
+    "SyRS-04": "일반적인 크기의 CBCT 영상(512x512x512 복셀 이하)이 로드 후 렌더링 준비 완료까지 합리적인 시간 내에 처리되어야 한다.",
+    "SyRS-05": "512x512x512 복셀 이하 CBCT 데이터 로드 후 첫 렌더링 완료까지 30초 이내(일반적인 하드웨어 기준)여야 한다."
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1237",
+      "PLAYG-1229"
+    ],
+    "SyRS-01": "[SyRS] 진단 목적 제외 명시",
+    "SyRS-02": "Regulatory",
+    "SyRS-03": "근거: PLAYG-1237 Indication, User Constraint, IU-09 금기 사항, Warnings and Precautions\n\n- 입력: 없음 (규제 요구사항)\n- 처리: UI에 진단 목적 아님 명시\n- 출력: 사용자 경고 문구 표시",
+    "SyRS-04": "소프트웨어에 본 제품이 단독 진단 도구가 아님을 명시하는 경고 문구가 표시되어야 한다. 영상의 임상적 해석 및 최종 진단은 반드시 유자격 전문의가 수행해야 한다는 안내가 포함되어야 한다.",
+    "SyRS-05": "애플리케이션 최초 실행 시 및 정보 메뉴에서 진단 목적이 아님을 명시하는 경고가 사용자에게 표시되어야 한다."
   }
 ]
