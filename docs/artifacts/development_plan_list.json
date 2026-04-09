@@ -1,0 +1,4 @@
+{
+  "Summary": "[SW Development Plan] Simple CBCT Viewer 소프트웨어 개발 계획서",
+  "Description": "IEC 62304 Class A 기준 소프트웨어 개발 계획서(SDP). V-Model 기반 수명 주기, JavaScript/WebGL 개발 환경, 코딩 표준, 위험 관리 연계, R&R, 형상 관리 및 빌드 배포 계획 포함. DP-01~DP-06 총 6개 섹션으로 구성."
+}
