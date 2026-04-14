@@ -1,0 +1,70 @@
+{
+  "status": "PASS",
+  "critical_count": 0,
+  "high_count": 0,
+  "issues": [
+    {
+      "id": "ARCH-1",
+      "severity": "MEDIUM",
+      "description": "docs/summary.md 파일이 프로젝트 루트에 위치함. docs/artifacts/ 또는 docs/progress/ 내에 배치하는 것이 프로젝트 문서 구조 일관성에 부합함.",
+      "file": "docs/summary.md",
+      "fixed": false
+    },
+    {
+      "id": "ARCH-2",
+      "severity": "LOW",
+      "description": "01_spec.md 참조 문서 경로가 파일명만 표기되어 있고, 02_plan.md는 docs/ 접두사, 실제 경로는 docs/artifacts/. 경로 표기 일관성 필요.",
+      "file": "docs/spec-kit/01_spec.md vs 02_plan.md",
+      "fixed": false
+    },
+    {
+      "id": "ARCH-3",
+      "severity": "LOW",
+      "description": "03_tasks.md 의존 관계 섹션이 빈 상태로 작성됨. TASK 간 선후관계 명시 필요.",
+      "file": "docs/spec-kit/03_tasks.md",
+      "fixed": false
+    },
+    {
+      "id": "ARCH-4",
+      "severity": "MEDIUM",
+      "description": "01_spec.md AR-02 오타: '원치이' -> '원칙이'. 의료기기 규제 문서에서 오타는 신뢰성 저하 우려.",
+      "file": "docs/spec-kit/01_spec.md AR-02",
+      "fixed": true
+    },
+    {
+      "id": "SEC-1",
+      "severity": "LOW",
+      "description": "spec-kit 문서에 PHI 참조 포함되어 있으나 실제 PHI 데이터는 없음. 공개 저장소 배포 시 참조만으로는 위험 낮음.",
+      "file": "docs/spec-kit/01_spec.md, 03_tasks.md",
+      "fixed": false
+    },
+    {
+      "id": "PERF-1",
+      "severity": "LOW",
+      "description": "03_tasks.md TASK 의존 관계 미정의로 병렬 실행 최적화 불가.",
+      "file": "docs/spec-kit/03_tasks.md",
+      "fixed": false
+    },
+    {
+      "id": "CQ-1",
+      "severity": "MEDIUM",
+      "description": "01_spec.md 오타 수정: '원치이' -> '원칙이'",
+      "file": "docs/spec-kit/01_spec.md AR-02",
+      "fixed": true
+    },
+    {
+      "id": "CQ-2",
+      "severity": "LOW",
+      "description": "02_plan.md 참조 문서 경로가 docs/IntendedUse.md 형식이나 실제 파일은 docs/artifacts/IntendedUse.md에 위치함. 경로 불일치 수정 완료.",
+      "file": "docs/spec-kit/02_plan.md 섹션 6",
+      "fixed": true
+    },
+    {
+      "id": "CQ-3",
+      "severity": "LOW",
+      "description": "03_tasks.md 참조 문서 경로도 동일하게 docs/ 접두사만 사용. docs/artifacts/ 실제 경로로 수정 완료.",
+      "file": "docs/spec-kit/03_tasks.md 섹션 3",
+      "fixed": true
+    }
+  ]
+}
