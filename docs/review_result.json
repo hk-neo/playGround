@@ -6,61 +6,55 @@
     {
       "id": "ARCH-1",
       "severity": "MEDIUM",
-      "description": "parser.py extract_sections() bold_header_match 조건 버그 - not current_header 조건으로 인해 첫 헤더 이후 bold 섹션 누락",
-      "fixed": true
-    },
-    {
-      "id": "ARCH-2",
-      "severity": "LOW",
-      "description": "parser.py bracket_header 미사용 변수 (Dead code)",
-      "fixed": true
-    },
-    {
-      "id": "ARCH-3",
-      "severity": "LOW",
-      "description": "parser.py Optional import 미사용",
-      "fixed": true
-    },
-    {
-      "id": "ARCH-5",
-      "severity": "LOW",
       "description": "checkers, reviewers 모듈이 빈 껍데기 - 실제 비즈니스 로직이 utils에 몰려 계획된 모듈 구조와 불일치",
       "fixed": false
     },
     {
-      "id": "SEC-1",
+      "id": "ARCH-2",
       "severity": "LOW",
-      "description": "parser.py read_doc() 경로 순회 방어 없음 - filename에 ../ 포함 시 상위 디렉토리 접근 가능",
-      "fixed": true
+      "description": "models.py DICOMMetadata가 ER Gate 검토용이나 CBCT Viewer 본체 타입과 이름 충돌 가능성",
+      "fixed": false
+    },
+    {
+      "id": "ARCH-3",
+      "severity": "LOW",
+      "description": "gen_spec.py와 write_spec.py가 거의 동일한 역할로 코드 중복",
+      "fixed": false
+    },
+    {
+      "id": "SEC-1",
+      "severity": "MEDIUM",
+      "description": "parser.py read_doc()에서 파일 미존재 시 빈 문자열 조용히 반환 - 보안 이벤트 로깅 누락",
+      "fixed": false
+    },
+    {
+      "id": "SEC-2",
+      "severity": "LOW",
+      "description": "gen_spec.py, write_spec.py에 유니코드 이스케이프된 한글 문자열 포함 - 공급망 검증 시 가독성 저하",
+      "fixed": false
     },
     {
       "id": "PERF-1",
-      "severity": "MEDIUM",
-      "description": "parser.py 정규식 re.compile()이 함수 호출 시마다 반복 수행 - 모듈 레벨 상수로 추출 필요",
-      "fixed": true
+      "severity": "LOW",
+      "description": "여러 파서 함수가 전체 텍스트를 매번 finditer로 순회 - 대용량 문서 시 성능 저하 가능",
+      "fixed": false
     },
     {
       "id": "CQ-1",
-      "severity": "HIGH",
-      "description": "parser.py extract_sections() bold_header_match 로직 결함으로 SRS/SAD 등 *bold* 형식 섹션 누락",
-      "fixed": true
+      "severity": "MEDIUM",
+      "description": "gen_spec.py와 write_spec.py가 거의 동일한 코드로 dead code 중복",
+      "fixed": false
     },
     {
       "id": "CQ-2",
-      "severity": "MEDIUM",
-      "description": "parser.py Dead code: bracket_header 변수 사용 안함",
-      "fixed": true
+      "severity": "LOW",
+      "description": "docs/summary.md가 git status에서 삭제(D) 상태 - 이전 세션 작성 문서 누락",
+      "fixed": false
     },
     {
       "id": "CQ-3",
-      "severity": "MEDIUM",
-      "description": "parser.py Dead code: Optional import 사용 안함",
-      "fixed": true
-    },
-    {
-      "id": "CQ-4",
       "severity": "LOW",
-      "description": "parser.py 정규식 패턴 가독성 저하 - 복잡한 패턴에 명명된 그룹 사용 권장",
+      "description": "test_parser.py의 sys.path.insert 방식이 취약 - pyproject.toml pythonpath 설정 권장",
       "fixed": false
     }
   ]
