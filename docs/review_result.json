@@ -6,65 +6,62 @@
     {
       "id": "ARCH-1",
       "severity": "MEDIUM",
-      "description": "docs/summary.md 파일이 프로젝트 루트에 위치함. docs/artifacts/ 또는 docs/progress/ 내에 배치하는 것이 프로젝트 문서 구조 일관성에 부합함.",
-      "file": "docs/summary.md",
-      "fixed": false
+      "description": "parser.py extract_sections() bold_header_match 조건 버그 - not current_header 조건으로 인해 첫 헤더 이후 bold 섹션 누락",
+      "fixed": true
     },
     {
       "id": "ARCH-2",
       "severity": "LOW",
-      "description": "01_spec.md 참조 문서 경로가 파일명만 표기되어 있고, 02_plan.md는 docs/ 접두사, 실제 경로는 docs/artifacts/. 경로 표기 일관성 필요.",
-      "file": "docs/spec-kit/01_spec.md vs 02_plan.md",
-      "fixed": false
+      "description": "parser.py bracket_header 미사용 변수 (Dead code)",
+      "fixed": true
     },
     {
       "id": "ARCH-3",
       "severity": "LOW",
-      "description": "03_tasks.md 의존 관계 섹션이 빈 상태로 작성됨. TASK 간 선후관계 명시 필요.",
-      "file": "docs/spec-kit/03_tasks.md",
-      "fixed": false
+      "description": "parser.py Optional import 미사용",
+      "fixed": true
     },
     {
-      "id": "ARCH-4",
-      "severity": "MEDIUM",
-      "description": "01_spec.md AR-02 오타: '원치이' -> '원칙이'. 의료기기 규제 문서에서 오타는 신뢰성 저하 우려.",
-      "file": "docs/spec-kit/01_spec.md AR-02",
-      "fixed": true
+      "id": "ARCH-5",
+      "severity": "LOW",
+      "description": "checkers, reviewers 모듈이 빈 껍데기 - 실제 비즈니스 로직이 utils에 몰려 계획된 모듈 구조와 불일치",
+      "fixed": false
     },
     {
       "id": "SEC-1",
       "severity": "LOW",
-      "description": "spec-kit 문서에 PHI 참조 포함되어 있으나 실제 PHI 데이터는 없음. 공개 저장소 배포 시 참조만으로는 위험 낮음.",
-      "file": "docs/spec-kit/01_spec.md, 03_tasks.md",
-      "fixed": false
+      "description": "parser.py read_doc() 경로 순회 방어 없음 - filename에 ../ 포함 시 상위 디렉토리 접근 가능",
+      "fixed": true
     },
     {
       "id": "PERF-1",
-      "severity": "LOW",
-      "description": "03_tasks.md TASK 의존 관계 미정의로 병렬 실행 최적화 불가.",
-      "file": "docs/spec-kit/03_tasks.md",
-      "fixed": false
+      "severity": "MEDIUM",
+      "description": "parser.py 정규식 re.compile()이 함수 호출 시마다 반복 수행 - 모듈 레벨 상수로 추출 필요",
+      "fixed": true
     },
     {
       "id": "CQ-1",
-      "severity": "MEDIUM",
-      "description": "01_spec.md 오타 수정: '원치이' -> '원칙이'",
-      "file": "docs/spec-kit/01_spec.md AR-02",
+      "severity": "HIGH",
+      "description": "parser.py extract_sections() bold_header_match 로직 결함으로 SRS/SAD 등 *bold* 형식 섹션 누락",
       "fixed": true
     },
     {
       "id": "CQ-2",
-      "severity": "LOW",
-      "description": "02_plan.md 참조 문서 경로가 docs/IntendedUse.md 형식이나 실제 파일은 docs/artifacts/IntendedUse.md에 위치함. 경로 불일치 수정 완료.",
-      "file": "docs/spec-kit/02_plan.md 섹션 6",
+      "severity": "MEDIUM",
+      "description": "parser.py Dead code: bracket_header 변수 사용 안함",
       "fixed": true
     },
     {
       "id": "CQ-3",
-      "severity": "LOW",
-      "description": "03_tasks.md 참조 문서 경로도 동일하게 docs/ 접두사만 사용. docs/artifacts/ 실제 경로로 수정 완료.",
-      "file": "docs/spec-kit/03_tasks.md 섹션 3",
+      "severity": "MEDIUM",
+      "description": "parser.py Dead code: Optional import 사용 안함",
       "fixed": true
+    },
+    {
+      "id": "CQ-4",
+      "severity": "LOW",
+      "description": "parser.py 정규식 패턴 가독성 저하 - 복잡한 패턴에 명명된 그룹 사용 권장",
+      "fixed": false
     }
   ]
 }
