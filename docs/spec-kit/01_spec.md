@@ -1,376 +1,402 @@
-# Feature Specification: [ADR-2] DICOM 파서 자체 구현
+# Feature Specification: [COMP-1.1] DICOM 파일 파서
 
-**Feature Branch**: `PLAYG-1371-dicom-parser-impl`
-**Status**: Draft | **Date**: 2026-04-14
-**Ticket**: `PLAYG-1371` | **Type**: Architecture
+**Feature Branch**: `PLAYG-1375-dicom-file-parser`
+**Status**: Draft | **Date**: 2026-04-15
+**Ticket**: `PLAYG-1375` | **Type**: Architecture
 **Input**: SAD(PLAYG-1311)
 
 ---
 
 ## 1. 개요
 
-### 1.1 목적
-본 문서는 PLAYG-1371 [ADR-2] DICOM 파서 자체 구현 틹윓의 실행 명세서이다.
-SAD(PLAYG-1311)에서 결정한 ADR-2(DICOM 파서 자체 구현) 아키텍처 결정을
-실제 코드로 구현하기 위한 작업 범위, 사용자 스토리, 요구사항, 완료 기준을 정의한다.
-외부 DICOM 라이브러리(daikon.js, dicomParser 등)에 대한 의존을 제거하고,
-CBCT Viewer에 필요한 최소한의 DICOM 파싱 기능을 자체 구현하는 것을 목적으로 한다.
+### 1.1 컴포넌트 식별
+- **컴포넌트 ID**: COMP-1.1
+- **컴포넌트명**: DICOM 파일 파서 (DICOM File Parser)
+- **아키텍처 계층**: Data Layer
+- **소유 티켓**: PLAYG-1375
 
-### 1.2 배경
-- SAD(PLAYG-1311) 7.3절 ADR-2에서 DICOM 파서 자체 구현을 아키텍처 결정으로 채택
-- SDS(PLAYG-1312) SDS-3.1 DICOMParser(COMP-1.1), SDS-3.2 DataValidator(COMP-1.2) 상세 설계 완료
-- SRS(PLAYG-1310) FR-5.4 서드파티 라이브러리 보안 감사 요구사항 수용
-- HAZ-3.1 외부 통신 차단 요구사항 수용
-- PLAYG-1370(ADR-1 기초 공사) 프로젝트 뾼대 및 모듈 스캐레톤 생성 완료
-### 1.3 ADR-2 결정 요약
+### 1.2 목적 및 범위
+본 컴포넌트는 Simple CBCT Viewer 애플리케이션에서 DICOM 파일의 로드, 형식 검증,
+메타데이터 파싱, 복셀 데이터 추출을 담당하는 핵심 Data Layer 컴포넌트이다.
+IEC 62304 Class A 의료기기 소프트웨어 표준을 준수하며, 외부 라이브러리 없이 자체 구현한다.
 
-| 항목 | 내용 |
-|------|------|
-| 문제 상황 | 외부 DICOM 라이브러리 의존 시 보안 감사 부담 및 외부 통신 코드 포함 위험 |
-| 대안 검토 | daikon.js, dicomParser(cornerstone), 자체 구현 |
-| 최종 선택 | 자체 구현 |
-| 근거 | FR-5.4 보안 감사, HAZ-3.1 외부 통신 차단, SBOM 관리 용이 |
-| 영향 범위 | DICOMParser(COMP-1.1), DataValidator(COMP-1.2) |
+### 1.3 추적성
+- **FR 추적**: FR-1.1 (DICOM 파일 선택), FR-1.2 (형식 검증), FR-1.3 (메타데이터 파싱),
+  FR-1.4 (복셀 데이터 파싱), FR-1.5 (오류 처리)
+- **관련 ADR**: ADR-1 (Layered Architecture), ADR-2 (자체 구현)
+- **위험 완화**: HAZ-1.1 (DICOM 파싱 오류로 인한 영상 왜곡), HAZ-5.2 (비표준 DICOM 기능 정지)
+- **의존성**: DataValidator (COMP-1.x 계열)
 
-### 1.4 대안 분석
-
-| 대안 | 장점 | 단점 | 평가 |
-|------|------|------|------|
-| daikon.js | 기능 풍부, 검증됨 | 보안 감사 부담, 외부 통신 위험, 큼들 크기 | 기각 |
-| dicomParser | 의료영상 표준 | 외부 의존성, 보안 감사 필요 | 기각 |
-| 자체 구현 | 보안 감사 최소화, SBOM 단순 | 개발 공수, 표준 준수 검증 | 채택 |
-
-### 1.5 자체 구현 범위
-
-| 항목 | 포함 | 비고 |
-|------|------|------|
-| DICOM Part 10 형식 파싱 | 포함 | 프리엠블 + DICM + 메타헤더 + 데이터셋 |
-| 명시적 VR LE (1.2.840.10008.1.2.1) | 포함 | 기본 |
-| 암시적 VR LE (1.2.840.10008.1.2) | 포함 | 기본 |
-| Big Endian (1.2.840.10008.1.2.2) | 포함 | 읽기 전용 |
-| JPEG/JPEG2000/RLE 압축 해제 | 제외 | 후속 단계 |
-
-### 1.6 지원 VR (Value Representation)
-
-| VR | 이름 | 설명 |
-|----|------|------|
-| US | Unsigned Short | 부호 없는 16비트 정수 |
-| SS | Signed Short | 부호 있는 16비트 정수 |
-| UL | Unsigned Long | 부호 없는 32비트 정수 |
-| SL | Signed Long | 부호 있는 32비트 정수 |
-| FL | Float Single | 32비트 부동소수점 |
-| FD | Float Double | 64비트 북동소수점 |
-| DS | Decimal String | 십진수 문자열 |
-| IS | Integer String | 정수 문자열 |
-| LO | Long String | 김 문자열(최대 64자) |
-| SH | Short String | 짧은 문자열(최대 16자) |
-| PN | Person Name | 사람 이름 |
-| UI | Unique Identifier | UID |
-| CS | Code String | 코드 문자열 |
-| DA | Date | 날짜 |
-| TM | Time | 시간 |
-| DT | Date Time | 날짜 시간 |
-| SQ | Sequence of Items | 항목 시퀀스 |
-| OW | Other Word | 기타 워드 데이터 |
-| OB | Other Byte | 기타 바이트 데이터 |
-| UN | Unknown | 알 수 없는 VR |
-
-### 1.7 참조 문서
-
-| 문서 | 틹윓 | 설명 |
-|------|------|------|
-| SAD | PLAYG-1311 | 아키텍처 명세서 (ADR-2 결정) |
-| SDS | PLAYG-1312 | 상세 설계 (DICOMParser, DataValidator) |
-| SRS | PLAYG-1310 | 요구사항 명세서 |
-| 기초 공사 Spec | PLAYG-1370 | ADR-1 기초 공사 명세서 |
-| Dev Plan | PLAYG-1231 | 개발 계획서 |
 ---
 
 ## 2. User Scenarios & Testing
 
-### User Story 1 -- DICOM Part 10 파일 파서 코어 구현 (Priority: P1) MVP
-- **설명**: DICOM Part 10 파일(프리엠블 128바이트 + DICM 매짝 바이트 + 파일 메타헤더 + 데이터셋)을 파싱하는 코어 엔진을 구현한다.
-- **Why this priority**: 모든 DICOM 파싱의 기반, 다른 모든 스토리의 전제 조건
-- **Independent Test**: 최소 DICOM Part 10 파일 입력 시 Transfer Syntax UID를 정확히 읽어오는지 단위 테스트 검증
-- **Acceptance Scenarios**:
-  1. **Given** 유효한 DICOM Part 10 파일, **When** parseDICOM() 호출, **Then** 프리엠블 건너뛰고 DICM 확인 후 메타헤더 파싱
-  2. **Given** DICM 매짝 바이트 없는 파일, **When** validateMagicByte() 호출, **Then** false 반환
-  3. **Given** 지원하지 않는 전송 구문(JPEG 압축), **When** validateTransferSyntax() 호출, **Then** 오류 반환
+### US-1: DICOM Part 10 파일 로드 및 매직 바이트 검증 (Priority: P1)
+- **설명**: 사용자가 DICOM 파일을 선택하면 128바이트 프리앰블을 건너뛰고 DICM 매직 바이트를
+  확인하여 유효한 DICOM Part 10 파일인지 검증한다.
+- **사전 조건**: 파일이 존재하고 읽기 가능함
+- **입력**: `File` 객체 (브라우저 File API)
+- **기대 결과**: 매직 바이트 검증 결과(true/false) 및 파일 유효성 상태 반환
+- **테스트 케이스**:
+  - TC-1.1: 유효한 DICOM Part 10 파일 로드 시 true 반환
+  - TC-1.2: 매직 바이트가 없는 파일 로드 시 false 반환
+  - TC-1.3: 빈 파일 또는 132바이트 미만 파일 로드 시 false 반환
+  - TC-1.4: 프리앰블은 있으나 DICM 시그니처가 다른 경우 false 반환
+- **FR 추적**: FR-1.1, FR-1.2
 
-### User Story 2 -- 전송 구문 파서 (명시적/암시적 VR) (Priority: P1) MVP
-- **설명**: 명시적 VR LE(1.2.840.10008.1.2.1)와 암시적 VR LE(1.2.840.10008.1.2) 데이터 요소 파싱 구현
-- **Why this priority**: CBCT 영상 대부분이 비압축 LE 전송 구문 사용
-- **Independent Test**: 각 전송 구문 테스트 데이터로 태그/요소, VR, 길이, 값 파싱 검증
-- **Acceptance Scenarios**:
-  1. **Given** 명시적 VR LE 데이터 요소, **When** parseDataElement() 호출, **Then** 태그, VR, 길이, 값 정확히 파싱
-  2. **Given** 암시적 VR LE 데이터 요소, **When** parseDataElement() 호출, **Then** VR 없이 파싱, VR은 데이터 사전 조회
-  3. **Given** 알 수 없는 태그, **When** 파싱, **Then** 에러 발생 없이 UN VR로 처리
+### US-2: 전송 구문(Transfer Syntax) 검증 (Priority: P1)
+- **설명**: DICOM 파일의 전송 구문 UID를 읽어 지원 가능한 인코딩인지 확인한다.
+- **사전 조건**: 파일이 DICOM Part 10 형식으로 검증됨
+- **입력**: 전송 구문 UID 문자열
+- **기대 결과**: 지원 가능한 전송 구문 여부 반환
+- **지원 전송 구문**:
+  - `1.2.840.10008.1.2.1` - Explicit VR Little Endian
+  - `1.2.840.10008.1.2.2` - Explicit VR Big Endian
+  - `1.2.840.10008.1.2` - Implicit VR Little Endian
+- **테스트 케이스**:
+  - TC-2.1: Explicit VR Little Endian UID 입력 시 true 반환
+  - TC-2.2: 압축 전송 구문 UID 입력 시 false 반환
+  - TC-2.3: 빈 문자열 입력 시 false 반환
+- **FR 추적**: FR-1.2, FR-1.5
 
-### User Story 3 -- Big Endian 전송 구문 지원 (읽기 전용) (Priority: P2)
-- **설명**: Big Endian(1.2.840.10008.1.2.2) DICOM 파일 읽기 지원
-- **Why this priority**: DEPRECATED지만 레거시 파일 호환성 필요
-- **Independent Test**: Big Endian 테스트 데이터로 바이트 오더 변환 검증
-- **Acceptance Scenarios**:
-  1. **Given** Big Endian DICOM 파일, **When** parseDICOM() 호출, **Then** 비그 엔디언 바이트 오더로 모든 요소 파싱
-  2. **Given** Big Endian 멀티바이트 값, **When** 읽기, **Then** 올바른 바이트 스와핑 수행
+### US-3: 메타데이터 파싱 (Priority: P1)
+- **설명**: DICOM 파일에서 환자 정보, 스터디 정보, 영상 파라미터 등 필수 메타데이터를 추출한다.
+- **사전 조건**: 전송 구문이 지원 가능한 것으로 확인됨
+- **입력**: ArrayBuffer (전체 DICOM 파일 데이터)
+- **기대 결과**: DICOMMetadata 객체 반환
+- **추출 메타데이터 항목**:
+  - 환자 ID (PatientID, Tag: 0010,0020)
+  - 환자 이름 (PatientName, Tag: 0010,0010)
+  - 스터디 인스턴스 UID (StudyInstanceUID, Tag: 0020,000D)
+  - 시리즈 인스턴스 UID (SeriesInstanceUID, Tag: 0020,000E)
+  - 행 수 (Rows, Tag: 0028,0010)
+  - 열 수 (Columns, Tag: 0028,0011)
+  - 비트 할당 (BitsAllocated, Tag: 0028,0100)
+  - 픽셀 표현 (PixelRepresentation, Tag: 0028,0103)
+  - 윈도우 센터/폭 (WindowCenter/Width, Tag: 0028,1050/1051)
+  - 슬라이스 두께 (SliceThickness, Tag: 0018,0050)
+  - 복셀 크기 (PixelSpacing, Tag: 0028,0030)
+- **테스트 케이스**:
+  - TC-3.1: 유효한 DICOM 파일에서 모든 필수 태그 추출 성공
+  - TC-3.2: 선택 태그가 누락된 파일에서 기본값으로 대체
+  - TC-3.3: 메타데이터 파싱 중 오류 발생 시 ErrorResult 반환
+- **FR 추적**: FR-1.3
 
-### User Story 4 -- DICOM 메타데이터 추출 (Priority: P1) MVP
-- **설명**: CBCT 영상 필수 DICOM 태그를 추출하여 DICOMMetadata 타입 반환
-- **Why this priority**: 메타데이터 없이는 렌더링, 측정, 검증 불가
-- **Independent Test**: 알려진 태그값 테스트 데이터로 DICOMMetadata 필드 검증
-- **Acceptance Scenarios**:
-  1. **Given** 환자 정보 태그 포함 파일, **When** parseMetadata() 호출, **Then** patientName, patientID 필드 정확히 채월
-  2. **Given** 영상 파라미터 태그 포함 파일, **When** parseMetadata() 호출, **Then** PixelSpacing, SliceThickness 파싱
-  3. **Given** 필수 태그 누락 파일, **When** parseMetadata() 호출, **Then** 누락 태그 목록을 errors 배열에 포함
+### US-4: 복셀(픽셀) 데이터 추출 (Priority: P1)
+- **설명**: 메타데이터를 기반으로 DICOM 파일에서 복셀 데이터를 추출하여 ArrayBuffer로 반환한다.
+- **사전 조건**: 메타데이터 파싱 완료, BitsAllocated 및 PixelRepresentation 확인됨
+- **입력**: ArrayBuffer, DICOMMetadata
+- **기대 결과**: 복셀 데이터 ArrayBuffer
+- **지원 데이터 타입**:
+  - 16-bit Signed Integer (BitsAllocated=16, PixelRepresentation=1)
+  - 16-bit Unsigned Integer (BitsAllocated=16, PixelRepresentation=0)
+  - 8-bit Unsigned Integer (BitsAllocated=8, PixelRepresentation=0)
+- **테스트 케이스**:
+  - TC-4.1: 16-bit signed 데이터 추출 시 올바른 Int16Array 길이
+  - TC-4.2: 8-bit unsigned 데이터 추출 시 올바른 Uint8Array 길이
+  - TC-4.3: 픽셀 데이터 태그(7FE0,0010)가 없는 경우 에러 반환
+  - TC-4.4: 픽셀 데이터 길이가 예상과 불일치하는 경우 경고 포함 반환
+- **FR 추적**: FR-1.4
 
-### User Story 5 -- 픽셀 데이터 추출 및 복셀 데이터 변환 (Priority: P1) MVP
-- **설명**: DICOM 픽셀 데이터 태그(7FE0,0010)를 추출하여 BitsAllocated에 따른 TypedArray로 변환
-- **Why this priority**: 영상 렌더링 핵심 입력 데이터
-- **Independent Test**: 알려진 픽셀값 테스트 데이터로 복셀 데이터 추출 검증
-- **Acceptance Scenarios**:
-  1. **Given** 16비트 BitsAllocated 픽셀 데이터(OW), **When** parsePixelData() 호출, **Then** Int16Array/Uint16Array로 해석
-  2. **Given** 8비트 BitsAllocated 픽셀 데이터(OB), **When** parsePixelData() 호출, **Then** Uint8Array로 해석
-  3. **Given** 픽셀 데이터 태그 누락, **When** parsePixelData() 호출, **Then** ParseError 발생
-### User Story 6 -- DataValidator 검증 로직 구현 (Priority: P1) MVP
-- **설명**: DataValidator로 DICOM 헤더 검증, PixelSpacing 검증, 복셀값 범위 검증, 축방향 검증 수행
-- **Why this priority**: HAZ-1.1(DICOM 파싱 오류 영상 웄곡) 완화를 위해 데이터 검증 필수
-- **Independent Test**: 정상/비정상 메타데이터로 각 검증 메서드 통과/실패 검증
-- **Acceptance Scenarios**:
-  1. **Given** 유효한 PixelSpacing 값, **When** validatePixelSpacing() 호출, **Then** 검증 성공
-  2. **Given** PixelSpacing 누락 또는 0 이하, **When** validatePixelSpacing() 호출, **Then** 검증 실패 및 사유 반환
-  3. **Given** 복셀값 범위 이상 데이터, **When** validateVoxelRange() 호출, **Then** 이상치 탐지 결과 반환
-  4. **Given** ImageOrientationPatient 누락, **When** validateImageOrientation() 호출, **Then** 경고 및 기본 축 방향 제안
+### US-5: 파싱 오류 처리 및 사용자 피드백 (Priority: P2)
+- **설명**: 파일 파싱 과정에서 발생하는 모든 오류를 포착하고 사용자에게 의미 있는
+  에러 메시지를 제공한다.
+- **사전 조건**: 파싱 파이프라인 실행 중
+- **입력**: ParseError 객체 (에러 코드, 메시지, 원인)
+- **기대 결과**: ErrorResult 객체 (사용자용 메시지, 개발자용 디버그 정보)
+- **에러 코드 체계**:
+  - `PARSE_ERR_INVALID_MAGIC`: 매직 바이트 불일치
+  - `PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX`: 미지원 전송 구문
+  - `PARSE_ERR_MISSING_REQUIRED_TAG`: 필수 태그 누락
+  - `PARSE_ERR_PIXEL_DATA_EXTRACTION`: 픽셀 데이터 추출 실패
+  - `PARSE_ERR_FILE_READ`: 파일 읽기 실패
+  - `PARSE_ERR_UNEXPECTED`: 예기치 않은 오류
+- **테스트 케이스**:
+  - TC-5.1: 잘못된 파일 형식 시 사용자 친화적 메시지 출력
+  - TC-5.2: 네트워크 오류 시 재시도 안내 메시지
+  - TC-5.3: 모든 에러 코드에 대해 한국어/영어 메시지 매핑 확인
+- **FR 추적**: FR-1.5
 
-### User Story 7 -- SQ 시퀀스 파싱 지원 (Priority: P2)
-- **설명**: SQ VR 파싱으로 중첩 데이터셋 처리
-- **Why this priority**: 일부 CBCT 파일에서만 시퀀스 태그 포함되지만 완전한 파싱을 위해 필요
-- **Independent Test**: 중첩 시퀀스 테스트 데이터로 계층 구조 파싱 검증
-- **Acceptance Scenarios**:
-  1. **Given** SQ VR 데이터 요소, **When** 파싱, **Then** Item/ItemDelimiter 처리하여 중첩 데이터셋 파싱
-  2. **Given** 중첩 깊이 3 이상 시퀀스, **When** 파싱, **Then** 재귀적 파싱 정상 동작, 무한 루프 방지
-
-### User Story 8 -- 비표준 파일 오류 처리 및 타임아웃 (Priority: P1) MVP
-- **설명**: 비표준/손상 DICOM 파일 입력 시 명확한 오류 메시지 밌환 및 타임아웃 메커니즘 적용
-- **Why this priority**: HAZ-5.2(비표준 DICOM 기능 정지) 완화 및 사용자 경험 보호
-- **Independent Test**: 다양한 손상 파일 입력 시 적절한 오류 분류와 메시지 반환 검증
-- **Acceptance Scenarios**:
-  1. **Given** 중간에 잘린(truncated) 파일, **When** parseDICOM() 호출, **Then** ParseError 발생 및 명확한 메시지 반환
-  2. **Given** 타임아웃 초과 대용량 파일, **When** parseDICOM() 호출, **Then** 타임아웃 오류 발생 및 파싱 중단
-  3. **Given** 잘못된 VR 문자열, **When** 파싱, **Then** 복구 시도 후 실패 시 명확한 오류 메시지 반환
-
-### Edge Cases (엓지 케이스)
-- **EC-001**: 프리엠블 없이 DICM으로 시작하는 비표준 DICOM 파일
-- **EC-002**: 그룹 길이 요소(0000 그룹) 포함 파일
-- **EC-003**: 픽셀 데이터 길이와 예상 길이 불일치
-- **EC-004**: Private 태그(홀수 그룹 번호) 포함 파일
-- **EC-005**: 메타헤더 그룹(0002)과 데이터셋 간 전송 구문 불일치
-- **EC-006**: 0바이트 길이 데이터 요소
-- **EC-007**: Undefined Length(-1)의 픽셀 데이터 및 시퀀스
-- **EC-008**: BOM(Byte Order Mark) 포함 텍스트 VR 값
 ---
 
-## 3. Requirements
+## 3. 인터페이스 명세
 
-### 3.1 기능 요구사항 (Functional Requirements)
+### 3.1 공개 인터페이스 (SDS-3.1 기준)
 
-#### FR-DP-001: DICOM Part 10 파일 형식 파싱
+#### parseDICOM(file: File) -> ParseResult
+DICOM 파일 파싱의 메인 진입점 함수. 파일 로드부터 메타데이터/복셀 데이터 추출까지의
+전체 파이프라인을 실행한다.
+- **매개변수**: `file` - 브라우저 File API의 File 객체
+- **반환값**: `ParseResult` 객체
+  - `metadata: DICOMMetadata` - 추출된 DICOM 메타데이터
+  - `voxelData: ArrayBuffer` - 추출된 복셀 데이터
+  - `errors: ErrorResult[]` - 파싱 과정의 에러/경고 목록
+- **비동기**: async 함수 (FileReader를 통한 비동기 읽기)
+- **예외**: ParseError (치명적 오류 시)
 
-DICOM Part 10 파일 형식을 파싱하는 코어 기능을 구현해야 한다.
+#### validateMagicByte(buffer: ArrayBuffer) -> boolean
+DICOM Part 10 파일의 매직 바이트(DICM)를 검증한다.
+- **매개변수**: `buffer` - 파일 전체 ArrayBuffer
+- **반환값**: `boolean` - 유효한 DICOM Part 10 파일 여부
+- **검증 로직**:
+  1. buffer 길이가 132바이트 이상인지 확인
+  2. 오프셋 128~131 위치의 4바이트가 'DICM'인지 확인
+- **부작용**: 없음 (순수 함수)
 
-**세부 요구사항**:
-- **FR-DP-001-1**: 프리엠블 128바이트를 읽고 건너뛰어야 한다
-- **FR-DP-001-2**: 오프셋 128에서 DICM 매짝 바이트(4바이트)를 확인해야 한다. 누락 시 ParseError 발생 (FR-1.2)
-- **FR-DP-001-3**: 파일 메타헤더 그룹(그룹 0002)을 명시적 VR Little Endian으로 파싱
-- **FR-DP-001-4**: Transfer Syntax UID(0002,0010)을 추출하여 전송 구문 확인
-- **FR-DP-001-5**: 데이터셋을 확인된 전송 구문에 따라 파싱
+#### validateTransferSyntax(uid: string) -> boolean
+전송 구문 UID가 본 시스템에서 지원 가능한지 검증한다.
+- **매개변수**: `uid` - 전송 구문 UID 문자열
+- **반환값**: `boolean` - 지원 가능 여부
+- **지원 목록**:
+  - `1.2.840.10008.1.2.1` (Explicit VR Little Endian)
+  - `1.2.840.10008.1.2.2` (Explicit VR Big Endian)
+  - `1.2.840.10008.1.2` (Implicit VR Little Endian)
+- **부작용**: 없음 (순수 함수)
 
-**관련 SRS**: FR-1.1, FR-1.2, FR-7.2
-**관련 Hazard**: HAZ-1.1
-**관련 SDS**: SDS-3.1 DICOMParser
+#### parseMetadata(buffer: ArrayBuffer) -> DICOMMetadata
+DICOM 데이터셋에서 필수 메타데이터 태그를 파싱한다.
+- **매개변수**: `buffer` - 파일 전체 ArrayBuffer
+- **반환값**: `DICOMMetadata` 객체
+- **DICOMMetadata 타입 정의**:
+  ```typescript
+  interface DICOMMetadata {
+    patientId: string;
+    patientName: string;
+    studyInstanceUID: string;
+    seriesInstanceUID: string;
+    rows: number;
+    columns: number;
+    bitsAllocated: number;
+    pixelRepresentation: number;
+    windowCenter: number;
+    windowWidth: number;
+    sliceThickness: number;
+    pixelSpacing: [number, number];
+    transferSyntaxUID: string;
+    photometricInterpretation: string;
+    samplesPerPixel: number;
+  }
+  ```
+- **기본값 정책**: 선택 태그 누락 시 합리적 기본값 사용
 
-#### FR-DP-002: 전송 구문 처리
+#### parsePixelData(buffer: ArrayBuffer, metadata: DICOMMetadata) -> ArrayBuffer
+DICOM 파일에서 픽셀(복셀) 데이터를 추출한다.
+- **매개변수**:
+  - `buffer` - 파일 전체 ArrayBuffer
+  - `metadata` - 파싱된 DICOMMetadata 객체
+- **반환값**: 복셀 데이터 ArrayBuffer
+- **추출 로직**:
+  1. Tag (7FE0,0010) 위치 탐색
+  2. 메타데이터 기반 데이터 길이 계산 (rows * columns * bitsAllocated / 8)
+  3. 해당 오프셋에서 ArrayBuffer 슬라이스 추출
 
-3가지 비압축 전송 구문에 대한 데이터 요소 파싱을 구현해야 한다.
+#### handleParseError(error: ParseError) -> ErrorResult
+파싱 오류를 처리하여 사용자 친화적 결과를 반환한다.
+- **매개변수**: `error` - ParseError 객체
+- **반환값**: `ErrorResult` 객체
+  - `userMessage: string` - 사용자용 메시지
+  - `debugInfo: string` - 개발자용 디버그 정보
+  - `errorCode: string` - 에러 코드
+  - `severity: 'error' | 'warning'` - 심각도
 
-**세부 요구사항**:
-- **FR-DP-002-1**: 명시적 VR Little Endian(1.2.840.10008.1.2.1) -- VR 필드를 직접 파싱
-- **FR-DP-002-2**: 암시적 VR Little Endian(1.2.840.10008.1.2) -- 데이터 사전에서 VR 조회
-- **FR-DP-002-3**: Big Endian(1.2.840.10008.1.2.2) -- 비그 엔디언 바이트 오더 적용 (읽기 전용)
-- **FR-DP-002-4**: 각 전송 구문별 데이터 요소 파싱 로직 구현 (Tag, VR, Length, Value)
-- **FR-DP-002-5**: 지원하지 않는 압축 전송 구문 감지 시 명확한 오류 반환
+---
 
-**관련 SRS**: FR-1.2, FR-7.2
+## 4. 내부 데이터 구조
 
-#### FR-DP-003: DICOM 데이터 사전 구축
+### 4.1 ParseResult
+```typescript
+interface ParseResult {
+  metadata: DICOMMetadata;
+  voxelData: ArrayBuffer;
+  errors: ErrorResult[];
+  isValid: boolean;
+}
+```
 
-CBCT 영상에 필요한 필수 태그 정보를 포함한 데이터 사전을 구축해야 한다.
+### 4.2 ParseError
+```typescript
+interface ParseError {
+  code: string;
+  message: string;
+  cause?: Error;
+  tag?: [number, number];
+}
+```
 
-**세부 요구사항**:
-- **FR-DP-003-1**: CBCT 영상 필수 태그 최소 목록 정의:
-  파일 메타: (0002,0000) FileMetaLength, (0002,0001) FileMetaVersion, (0002,0010) TransferSyntax
-  환자: (0010,0010) PatientName, (0010,0020) PatientID, (0010,0030) BirthDate
-  스터디: (0008,0020) StudyDate, (0008,0030) StudyTime, (0008,1030) StudyDescription
-  영상 파라미터: (0018,0050) SliceThickness, (0018,0060) KVP, (0018,1151) XRayTubeCurrent
-  플셉셀 간격: (0028,0030) PixelSpacing
-  이미지 표현: (0020,0037) ImageOrientationPatient, (0020,0032) ImagePositionPatient
-  플셀 데이터: (0028,0010) Rows, (0028,0011) Columns, (0028,0008) NumberOfFrames
-  비트 표현: (0028,0100) BitsAllocated, (0028,0101) BitsStored, (0028,0102) HighBit, (0028,0103) PixelRepresentation
-  윈도우: (0028,1050) WindowCenter, (0028,1051) WindowWidth
-  발명 기준: (0018,0015) BodyPartExamined, (0008,0060) Modality
-- **FR-DP-003-2**: 사전에 없는 태그는 UN(Unknown) VR로 처리
-- **FR-DP-003-3**: 암시적 VR 파싱 시 데이터 사전을 VR 조회 소스로 사용
+### 4.3 ErrorResult
+```typescript
+interface ErrorResult {
+  userMessage: string;
+  debugInfo: string;
+  errorCode: string;
+  severity: 'error' | 'warning';
+}
+```
+### 4.4 내부 헬퍼 타입
+```typescript
+// DICOM 태그 식별자
+type DicomTag = [number, number]; // [Group, Element]
 
-**관련 SRS**: FR-1.3
-#### FR-DP-004: VR별 값 파싱 구현
+// 태그 읽기 결과
+interface TagReadResult {
+  tag: DicomTag;
+  vr: string; // Value Representation
+  length: number;
+  value: unknown;
+  offset: number;
+}
 
-20개 VR에 대한 값 파싱을 구현해야 한다.
+// 파싱 컨텍스트 (파서 내부 상태)
+interface ParseContext {
+  buffer: ArrayBuffer;
+  dataView: DataView;
+  offset: number;
+  isLittleEndian: boolean;
+  isExplicitVR: boolean;
+  transferSyntaxUID: string;
+}
+```
 
-**세부 요구사항**:
-- **FR-DP-004-1**: 숫자 VR(US, SS, UL, SL, FL, FD) -- DataView 메서드로 바이너리 읽기
-- **FR-DP-004-2**: 문자열 숫자 VR(DS, IS) -- 문자열 파싱 후 parseFloat/parseInt 변환
-- **FR-DP-004-3**: 문자열 VR(LO, SH, PN, UI, CS, DA, TM, DT) -- 패딩 제거 후 문자열 반환
-- **FR-DP-004-4**: 바이너리 VR(OB, OW, UN) -- ArrayBuffer 그대로 반환
-- **FR-DP-004-5**: SQ VR -- 재귀적 데이터셋 파싱 (Item 태그 FFFE,E000 처리)
-- **FR-DP-004-6**: 멀티밸류(multi-value) 처리 -- DS, IS 등 역슬래시 구분자 처리
+---
 
-#### FR-DP-005: 메타데이터 추출 및 DICOMMetadata 생성
+## 5. 처리 로직 / 알고리즘
 
-파싱된 태그 데이터에서 DICOMMetadata 타입 객체를 생성해야 한다.
+### 5.1 전체 파싱 파이프라인
+```
+parseDICOM(file)
+  |-> readFileAsArrayBuffer(file)
+  |-> validateMagicByte(buffer)
+  |     |-- 실패: PARSE_ERR_INVALID_MAGIC 반환
+  |-> determineTransferSyntax(buffer)
+  |-> validateTransferSyntax(uid)
+  |     |-- 실패: PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX 반환
+  |-> createParseContext(buffer, uid)
+  |-> parseMetadata(buffer, context)
+  |-> parsePixelData(buffer, metadata)
+  |     |-- 실패: PARSE_ERR_PIXEL_DATA_EXTRACTION 반환
+  |-> assembleParseResult(metadata, voxelData, errors)
+  |-> return ParseResult
+```
 
-**세부 요구사항**:
-- **FR-DP-005-1**: DICOMMetadata 타입의 모든 필드를 채워야 한다 (types.js 정의 준수)
-- **FR-DP-005-2**: 필수 필드 누락 시 errors 배열에 누락 태그 정보 기록
-- **FR-DP-005-3**: PixelSpacing(0028,0030)을 배열 [row, column]로 파싱 (역슬래시 \ 구분자)
-- **FR-DP-005-4**: ImageOrientationPatient(0020,0037)을 6요소 배열로 파싱 (DS VR 멀티밸류)
-- **FR-DP-005-5**: WindowCenter/WindowWidth(0028,1050/1051) 파싱 (다중 값 지원)
+### 5.2 DICOM 태그 읽기 알고리즘
+1. 현재 오프셋에서 4바이트 읽어 Group/Element 태그 식별
+2. 전송 구문에 따라 VR(Volume Representation) 읽기:
+   - Explicit VR: 2바이트 VR 문자열 읽기
+   - Implicit VR: VR을 사전에 정의된 맵에서 조회
+3. 값 길이 읽기 (2바이트 또는 4바이트)
+4. 값 읽기 (길이만큼)
+5. 다음 태그로 오프셋 이동
 
-**관련 SRS**: FR-1.3
-**관련 SDS**: SDS-3.1 parseMetadata()
+### 5.3 바이트 오더(Byte Order) 처리
+- Transfer Syntax UID에 따라 바이트 오더 결정
+- Little Endian (기본): DataView의 littleEndian=true 설정
+- Big Endian: DataView의 littleEndian=false 설정
+- 바이트 오더는 ParseContext에 저장하여 일관성 유지
 
-#### FR-DP-006: 플셀 데이터 추출
+### 5.4 오류 복구 전략
+- **필수 태그 누락**: PARSE_ERR_MISSING_REQUIRED_TAG 에러 발생, 파싱 중단
+- **선택 태그 누락**: 기본값으로 대체, 경고(warning) 추가
+- **알 수 없는 태그**: 건너뛰기 (길이만큼 오프셋 이동)
+- **시퀀스 태그 (SQ)**: 중첩 깊이 제한 (최대 10레벨) 적용 후 건너뛰기
 
-DICOM 플셀 데이터를 추출하여 처리 가능한 형태로 반환해야 한다.
+---
 
-**세부 요구사항**:
-- **FR-DP-006-1**: 플셀 데이터 태그(7FE0,0010)을 찾아 ArrayBuffer로 추출
-- **FR-DP-006-2**: BitsAllocated(0028,0100)에 따라 8/16/32비트 TypedArray 변환
-- **FR-DP-006-3**: PixelRepresentation(0028,0103)에 따라 signed/unsigned 결정
-- **FR-DP-006-4**: 플셀 데이터 누락 시 ParseError 발생
-- **FR-DP-006-5**: 플셀 데이터 길이와 예상 길이(Rows*Columns*Frames*BytesPerPixel) 비교, 불일치 시 경고 기록
+## 6. IEC 62304 Class A 준수 사항
 
-**관련 SRS**: FR-1.4
-**관련 Hazard**: HAZ-1.1
+### 6.1 소프트웨어 단위 검증 (단위 테스트)
+- 모든 공개 인터페이스에 대한 단위 테스트 작성 필수
+- Vitest 프레임워크 사용
+- 테스트 커버리지 목표: 90% 이상
+- 각 테스트 케이스는 추적성 매트릭스와 연결
 
-#### FR-DP-007: 데이터 검증 (DataValidator)
+### 6.2 이상 상태 처리 (Anomaly Handling)
+- 모든 파싱 오류는 structured ErrorResult로 처리
+- 예외(Exception)는 최상위 parseDICOM에서만 catch
+- 내부 함수는 ParseError 객체를 생성하여 상위로 전달
+- 오류 로그는 console.error로 출력 (디버그 모드에서만)
 
-파싱된 DICOM 데이터의 무결성과 일관성을 검증해야 한다.
+### 6.3 변경 이력 관리
+- 모든 인터페이스 변경은 문서에 반영
+- Breaking Change 시 티켓 업데이트
 
-**세부 요구사항**:
-- **FR-DP-007-1**: 필수 태그 존재 여부 검증 (PatientID, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID)
-- **FR-DP-007-2**: VR(Value Representation) 형식 위반 검출
-- **FR-DP-007-3**: 값 범위 검증 (예: Rows > 0, BitsAllocated in {8,16,32})
-- **FR-DP-007-4**: 파일 메타헤더 일관성 검증 (FileMetaVersion, TransferSyntaxUID)
-- **FR-DP-007-5**: 검증 결과를 ValidationError 배열로 반환 (태그, 메시지, 심각도)
+---
 
-**관련 SRS**: FR-5.4
-**관련 Hazard**: HAZ-3.1
-**관련 SDS**: SDS-3.2 DataValidator
+## 7. 의존성 및 연관 관계
 
-#### FR-DP-008: 파싱 타임아웃 및 안전 장치
+### 7.1 내부 의존성
+| 컴포넌트 | 방향 | 설명 |
+|----------|------|------|
+| DataValidator | 단방향 (사용) | 파싱 결과의 유효성 검증 위임 |
+| ErrorCodes (공유) | 양방향 (참조) | 공통 에러 코드 정의 |
 
-악의적이거나 손상된 파일로 인한 무한 루프나 메모리 고갈을 방지해야 한다.
+### 7.2 외부 의존성
+- **없음**: ADR-2에 따라 외부 DICOM 라이브러리 사용하지 않음
+- 브라우저 내장 API만 사용 (FileReader, ArrayBuffer, DataView, TextDecoder)
 
-**세부 요구사항**:
-- **FR-DP-008-1**: 최대 파싱 시간 타임아웃 설정 (기본값 30초)
-- **FR-DP-008-2**: 최대 데이터 요소 개수 제한 (기본값 10,000개)
-- **FR-DP-008-3**: 최대 중첩 깊이 제한 (SQ 시퀀스, 기본값 16레벨)
-- **FR-DP-008-4**: 파일 크기 상한 검사 (기본값 2GB)
-- **FR-DP-008-5**: 타임아웃/한계 초과 시 명확한 ParseError 반환
+### 7.3 아키텍처 매핑
+```
+Layer 1: Presentation Layer (UI)
+    |
+Layer 2: Application Layer
+    |
+Layer 3: Business Logic Layer
+    |
+Layer 4: Data Layer  <-- [COMP-1.1 DICOM 파일 파서]
+    |                     [COMP-1.x DataValidator]
+    v
+  File System / Browser File API
+```
 
-**관련 SRS**: NFR-2.1, NFR-2.2
-**관련 Hazard**: HAZ-1.1
+---
 
-### 3.2 비기능 요구사항 (Non-Functional Requirements)
+## 8. 제약 사항 및 가정
 
-#### NFR-DP-001: 보안 -- 외부 의존성 제로
+### 8.1 제약 사항
+- **단일 슬라이스 처리**: 현재 스펙은 단일 DICOM 파일(단일 슬라이스)만 처리
+- **비압축 전송 구문만 지원**: JPEG, JPEG2000, RLE 등 압축 포맷은 지원하지 않음
+- **최대 파일 크기**: 512MB (브라우저 메모리 제약)
+- **최대 태그 수**: 10,000개 (무한 루프 방지)
+- **시퀀스 중첩 깊이**: 최대 10레벨
 
-DICOM 파서는 어떠한 외부 라이브러리에도 의존하지 않아야 한다.
+### 8.2 가정
+- 입력 DICOM 파일은 DICOM Part 10 형식을 따름
+- 프리앰블은 항상 128바이트
+- 메타데이터 그룹(0002,xxxx)은 명시적 VR을 사용
+- 픽셀 데이터는 마지막 태그로 존재
 
-**세부 요구사항**:
-- **NFR-DP-001-1**: package.json에 DICOM 관련 외부 의존성이 없어야 한다
-- **NFR-DP-001-2**: 네트워크 API (fetch, XMLHttpRequest, WebSocket) 호출이 없어야 한다
-- **NFR-DP-001-3**: SBOM(Software Bill of Materials)에 DICOM 파서 관련 항목이 자체 구현으로만 표기
-- **NFR-DP-001-4**: ESLint 보안 규칙으로 외부 통신 코드 포함 여부 자동 검증
+### 8.3 위험 완화 매핑
+| 위험 ID | 위험 설명 | 완화 조치 |
+|---------|-----------|-----------|
+| HAZ-1.1 | DICOM 파싱 오류로 영상 왜곡 | 모든 파싱 단계에 대한 검증 로직 포함, 단위 테스트로 검증 |
+| HAZ-5.2 | 비표준 DICOM으로 기능 정지 | 지원하지 않는 전송 구문/태그는 graceful error 처리 |
 
-**관련 SRS**: FR-5.4, HAZ-3.1
-**ADR 근거**: 보안 감사 부담 최소화, 외부 통신 코드 포함 위험 제거
+---
 
-#### NFR-DP-002: 성능
+## 9. 검증 기준 (Definition of Done)
 
-CBCT 영상 파일을 합리적인 시간 내에 파싱해야 한다.
+- [ ] 모든 공개 인터페이스가 명세대로 구현됨
+- [ ] 모든 User Scenario에 대한 단위 테스트 통과
+- [ ] 테스트 커버리지 90% 이상 달성
+- [ ] 유효한 DICOM 파일 파싱 성공
+- [ ] 유효하지 않은 파일에 대한 오류 처리 확인
+- [ ] IEC 62304 Class A 문서화 요건 충족
+- [ ] 코드 리뷰 완료
+- [ ] FR-1.1 ~ FR-1.5 추적성 매트릭스 연결 확인
 
-**세부 요구사항**:
-- **NFR-DP-002-1**: 100MB 이하 CBCT 파일 파싱 시 5초 이내 완료
-- **NFR-DP-002-2**: 메타데이터만 추출하는 경우 1초 이내 완료
-- **NFR-DP-002-3**: ArrayBuffer 기반 처리로 메모리 복사 최소화
-- **NFR-DP-002-4**: DataView를 활용한 엔디안 변환 (추가 버퍼 할당 없음)
+---
 
-**관련 SRS**: NFR-1
+## 10. 참조 문서
 
-#### NFR-DP-003: 확장성
+| 문서 | 설명 |
+|------|------|
+| SAD (PLAYG-1311) | 소프트웨어 아키텍처 설계서 |
+| ADR-1 | Layered Architecture 4계층 10모듈 채택 |
+| ADR-2 | 외부 라이브러리 없이 DICOM 파서 자체 구현 |
+| DICOM PS3.5 | DICOM Data Structure and Encoding |
+| DICOM PS3.10 | DICOM Media Storage and File Format |
+| IEC 62304 | 의료기기 소프트웨어 생명주기 프로세스 |
 
-향후 압축 전송 구문(JPEG, JPEG2000, RLE) 추가가 용이하도록 설계해야 한다.
+---
 
-**세부 요구사항**:
-- **NFR-DP-003-1**: 전송 구문 파서를 Strategy 패턴으로 분리
-- **NFR-DP-003-2**: 새로운 VR 추가 시 기존 코드 수정 없이 확장 가능
-- **NFR-DP-003-2**: 파서 인터페이스를 통해 구현 교체 가능
-
-**관련 SRS**: NFR-3
-
-### 3.3 제약사항
-
-- **C-01**: JavaScript(ES2022+)만 사용, TypeScript 도입 없음
-- **C-02**: 브라우저 환경 전용 (Node.js 미지원)
-- **C-03**: Web Workers에서도 실행 가능해야 함 (DOM 의존 없음)
-- **C-04**: IEC 62304 Class A 준수
-- **C-05**: 압축 전송 구문(JPEG, JPEG2000, RLE)은 후속 티켓에서 다룸
-- **C-06**: DICOM 네트워크 프로토콜(DIMSE)은 범위 외
-
-## 4. Success Criteria
-
-### 4.1 기능 검증 기준
-
-| ID | 검증 항목 | 검증 방법 | 관련 FR |
-|------|----------|-----------|--------|
-| SC-01 | Part 10 파일 128바이트 프리앰블 + DICM 매직 감지 | 단위 테스트 (정상/비정상 파일) | FR-DP-001 |
-| SC-02 | 명시적 VR LE 파싱 정확성 | 태그-VR-값 일치 검증 테스트 | FR-DP-002 |
-| SC-03 | 암시적 VR LE 파싱 정확성 | 데이터 사전 기반 VR 조회 검증 | FR-DP-002 |
-| SC-04 | Big Endian 파싱 정확성 | 엔디안 변환 검증 테스트 | FR-DP-002 |
-| SC-05 | 20개 VR 값 파싱 정확성 | VR별 파싱 테스트 (숫자/문자열/바이너리/SQ) | FR-DP-004 |
-| SC-06 | DICOMMetadata 객체 생성 완전성 | 필수 필드 전수 검증 테스트 | FR-DP-005 |
-| SC-07 | 픽셀 데이터 TypedArray 변환 정확성 | BitsAllocated/PixelRepresentation별 테스트 | FR-DP-006 |
-| SC-08 | DataValidator 검증 결과 반환 | 필수 태그 누락/범위 위반/VR 위반 테스트 | FR-DP-007 |
-| SC-09 | 타임아웃 및 한계 동작 | 대용량 파일/과도한 태그/깊은 중첩 테스트 | FR-DP-008 |
-
-### 4.2 비기능 검증 기준
-
-| ID | 검증 항목 | 검증 방법 | 관련 NFR |
-|------|----------|-----------|---------|
-| SC-10 | 외부 의존성 제로 | package.json 점검 + ESLint 검증 | NFR-DP-001 |
-| SC-11 | 100MB 파일 5초 이내 파싱 | 성능 벤치마크 테스트 | NFR-DP-002 |
-| SC-12 | Strategy 패턴 기반 전송 구문 교체 | 아키텍처 리뷰 | NFR-DP-003 |
-
-### 4.3 추적성 매트릭스 (Traceability)
-
-| SRS ID | ADR-2 Spec ID | SDS 참조 | HAZ 참조 |
-|--------|--------------|---------|----------|
-| FR-1.1 | FR-DP-001 | SDS-3.1 | HAZ-1.1 |
-| FR-1.2 | FR-DP-002 | SDS-3.1 | - |
-| FR-1.3 | FR-DP-005 | SDS-3.1 | - |
-| FR-1.4 | FR-DP-006 | SDS-3.1 | HAZ-1.1 |
-| FR-5.4 | FR-DP-007, NFR-DP-001 | SDS-3.2 | HAZ-3.1 |
-| FR-7.2 | FR-DP-002 | SDS-3.1 | - |
-| NFR-1 | NFR-DP-002 | - | - |
-| NFR-2 | NFR-DP-001, FR-DP-008 | - | HAZ-3.1 |
-| NFR-3 | NFR-DP-003 | - | - |
+*본 문서는 PLAYG-1375 티켓의 Feature Specification으로, IEC 62304 Class A 준수를 위해
+작성되었습니다. 최종 업데이트: 2026-04-15*
