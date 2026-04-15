@@ -5,56 +5,121 @@
   "issues": [
     {
       "id": "ARCH-1",
-      "severity": "MEDIUM",
-      "description": "checkers, reviewers 모듈이 빈 껍데기 - 실제 비즈니스 로직이 utils에 몰려 계획된 모듈 구조와 불일치",
-      "fixed": false
+      "severity": "HIGH",
+      "description": "[dicomDictionary.js] 시퀀스 구분 태그 키가 makeTagKey() 출력과 불일치. FFFE,E000 태그가 'FFfee000'으로 저장되어 makeTagKey(0xFFFE,0xE000) 결과인 'FFFEE000'과 매칭 불가. 중복 키('00020001') 존재.",
+      "file": "viewer/src/data/dicomDictionary.js",
+      "fixed": true
     },
     {
       "id": "ARCH-2",
-      "severity": "LOW",
-      "description": "models.py DICOMMetadata가 ER Gate 검토용이나 CBCT Viewer 본체 타입과 이름 충돌 가능성",
+      "severity": "MEDIUM",
+      "description": "[dicomDictionary.js] DICTIONARY가 module-private(const)로 선언되어 사전 확장 불가. 향후 압축 전송 구문 추가 시 모듈 재작성 필요. NFR-DP-003 확장성 요구사항 위반 가능성.",
+      "file": "viewer/src/data/dicomDictionary.js",
       "fixed": false
     },
     {
       "id": "ARCH-3",
-      "severity": "LOW",
-      "description": "gen_spec.py와 write_spec.py가 거의 동일한 역할로 코드 중복",
+      "severity": "HIGH",
+      "description": "[data/index.js] 배럴 파일이 빈 주석만 있고 dicomDictionary 공개 API를 export하지 않음. 외부 계층에서 직접 경로 지정 필요. IEC 62304 제5.4.3 공개 API 문서화 미흡.",
+      "file": "viewer/src/data/index.js",
+      "fixed": true
+    },
+    {
+      "id": "ARCH-4",
+      "severity": "MEDIUM",
+      "description": "[eslint.config.js] SecurityGuard(Business)가 Cross-Cutting Concern으로 모든 계층 참조 가능 예외가 ESLint 규칙에 반영되지 않음.",
+      "file": "viewer/eslint.config.js",
       "fixed": false
+    },
+    {
+      "id": "ARCH-5",
+      "severity": "MEDIUM",
+      "description": "[ParseResult.js] ParseResult.errors가 string[]으로 정의되었으나 spec(FR-DP-005-2)은 { tag, message, severity } 구조 요구. 타입 정의가 spec과 불일치.",
+      "file": "viewer/src/types/ParseResult.js",
+      "fixed": false
+    },
+    {
+      "id": "ARCH-6",
+      "severity": "LOW",
+      "description": "[dicomDictionary.js] '00020001' 키 중복 정의 (수정으로 해결됨).",
+      "file": "viewer/src/data/dicomDictionary.js",
+      "fixed": true
     },
     {
       "id": "SEC-1",
       "severity": "MEDIUM",
-      "description": "parser.py read_doc()에서 파일 미존재 시 빈 문자열 조용히 반환 - 보안 이벤트 로깅 누락",
+      "description": "[eslint.config.js] no-restricted-globals에 eval, Function, import() 누락. 동적 코드 실행 공격 벡터 차단 불가.",
+      "file": "viewer/eslint.config.js",
       "fixed": false
     },
     {
       "id": "SEC-2",
+      "severity": "MEDIUM",
+      "description": "[eslint.config.js] Worker API 사용 제한 규칙 누락. C-03에서 Web Workers 허용하나 외부 스크립트 로딩 통한 코드 인젝션 가능성 존재.",
+      "file": "viewer/eslint.config.js",
+      "fixed": false
+    },
+    {
+      "id": "SEC-3",
       "severity": "LOW",
-      "description": "gen_spec.py, write_spec.py에 유니코드 이스케이프된 한글 문자열 포함 - 공급망 검증 시 가독성 저하",
+      "description": "[vite.config.js] 빌드 산출물에 sourcemap 설정 미명시. 프로덕션 빌드에 sourcemap 포함 시 내부 구조 노출 위험.",
+      "file": "viewer/vite.config.js",
       "fixed": false
     },
     {
       "id": "PERF-1",
+      "severity": "MEDIUM",
+      "description": "[dicomDictionary.js] makeTagKey()가 매 호출마다 toString(16)+toUpperCase()+padStart 문자열 조작 수행. 파싱 시 수만 회 호출 예상.",
+      "file": "viewer/src/data/dicomDictionary.js",
+      "fixed": false
+    },
+    {
+      "id": "PERF-2",
       "severity": "LOW",
-      "description": "여러 파서 함수가 전체 텍스트를 매번 finditer로 순회 - 대용량 문서 시 성능 저하 가능",
+      "description": "[VolumeData.js] createVolumeData의 new Float32Array(0)가 매 호출마다 새 객체 생성.",
+      "file": "viewer/src/types/VolumeData.js",
       "fixed": false
     },
     {
       "id": "CQ-1",
-      "severity": "MEDIUM",
-      "description": "gen_spec.py와 write_spec.py가 거의 동일한 코드로 dead code 중복",
-      "fixed": false
+      "severity": "HIGH",
+      "description": "[dicomDictionary.js] makeTagKey() JSDoc에 Big Endian 파싱 시 group/element 전달 방식 명세 부족. Big Endian에서는 태그 바이트를 읽을 때 엔디안 변환이 필요하므로, 호출 시점에 이미 네이티브 정수로 변환된 값을 전달해야 함을 명시해야 함.",
+      "file": "viewer/src/data/dicomDictionary.js",
+      "fixed": true
     },
     {
       "id": "CQ-2",
-      "severity": "LOW",
-      "description": "docs/summary.md가 git status에서 삭제(D) 상태 - 이전 세션 작성 문서 누락",
+      "severity": "MEDIUM",
+      "description": "[DICOMMetadata.js] pixelSpacing 기본값이 [0, 0]인데 0은 유효하지 않은 값. null 기본값이 DataValidator에서 누락과 0값 구분에 유리.",
+      "file": "viewer/src/types/DICOMMetadata.js",
       "fixed": false
     },
     {
       "id": "CQ-3",
+      "severity": "MEDIUM",
+      "description": "[CBVError.js] 하위 에러 클래스 기본 code값이 하드코딩. 에러 코드 체계 중앙 집중 관리 필요.",
+      "file": "viewer/src/errors/CBVError.js",
+      "fixed": false
+    },
+    {
+      "id": "CQ-4",
+      "severity": "MEDIUM",
+      "description": "[Factory 함수들] overrides 스프레드만 사용하고 입력값 검증 없음. createDICOMMetadata({ rows: -1 }) 등 잘못된 객체 생성 가능.",
+      "file": "viewer/src/types/DICOMMetadata.js",
+      "fixed": false
+    },
+    {
+      "id": "CQ-5",
       "severity": "LOW",
-      "description": "test_parser.py의 sys.path.insert 방식이 취약 - pyproject.toml pythonpath 설정 권장",
+      "description": "[vite.config.js] globals: true로 인해 테스트 파일에서 명시적 import 없이 describe/it/expect 사용 가능.",
+      "file": "viewer/vite.config.js",
+      "fixed": false
+    },
+    {
+      "id": "CQ-6",
+      "severity": "LOW",
+      "description": "[SliceData.js] plane 속성 문자열 검증 없음. 유효 평면값 제한 필요.",
+      "file": "viewer/src/types/SliceData.js",
       "fixed": false
     }
   ]
