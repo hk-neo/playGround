@@ -286,7 +286,7 @@ readTag(dataView, offset, context):
 
 ### Phase 4: 복셀 데이터 추출 구현
 
-**목표**: 메타데이터를 기반으로 DICOM 파일에서 픽셀(복셀) 데이터를 추출한다.
+**목표**: 메타데이터를 기반으로 DICOM 파일에서 복셀(픽셀) 데이터를 추출한다.
 HAZ-1.1(영상 왜곡) 완화를 위해 데이터 길이 검증을 철저히 수행한다.
 
 **근거 문서**: 01_spec.md US-4, TC-4.1~4.4, 섹션 3.1(parsePixelData 명세)
@@ -305,6 +305,8 @@ HAZ-1.1(영상 왜곡) 완화를 위해 데이터 길이 검증을 철저히 수
 | 16 | 1 (Signed) | Int16Array | 2 |
 | 16 | 0 (Unsigned) | Uint16Array | 2 |
 | 8 | 0 (Unsigned) | Uint8Array | 1 |
+
+**성능 최적화**: parseMetadata 과정에서 Tag(7FE0,0010)의 오프셋을 발견하면 `metadata._pixelDataOffset`에 캐싱하여 parsePixelData에서 재스캔을 방지한다. _pixelDataOffset은 내부 구현 세부사항으로 공개 API에 노출하지 않는다.
 
 **parsePixelData 추출 로직 의사코드:**
 ```text
@@ -350,6 +352,7 @@ HAZ-5.2(비표준 DICOM 기능 정지) 완화를 위한 graceful error 처리를
 | PARSE_ERR_MISSING_REQUIRED_TAG | 필수 DICOM 태그가 누락되었습니다 | Missing required DICOM tag | error |
 | PARSE_ERR_PIXEL_DATA_EXTRACTION | 픽셀 데이터 추출에 실패했습니다 | Failed to extract pixel data | error |
 | PARSE_ERR_FILE_READ | 파일 읽기에 실패했습니다 | Failed to read file | error |
+| PARSE_ERR_FILE_TOO_LARGE | 파일 크기가 제한을 초과했습니다 | File size exceeds limit | error |
 | PARSE_ERR_UNEXPECTED | 예기치 않은 오류가 발생했습니다 | Unexpected error occurred | error |
 
 **handleParseError 구현 설계:**
