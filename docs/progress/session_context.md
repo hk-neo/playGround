@@ -14,13 +14,12 @@
 - **검증 기준**: 6US + 12TS
 
 ### 프로젝트 문서 구조
-- `docs/spec-kit/01_spec.md` — 스펙 정의서
-- `docs/spec-kit/02_plan.md` — 이행 계획서
-- `docs/spec-kit/03_tasks.md` — 태스크 분해
-- `docs/summary.md` — 작업 요약
-- `docs/progress/session_context.md` — 본 파일 (세션 컨텍스트)
+- docs/spec-kit/01_spec.md — 스펙 정의서
+- docs/spec-kit/02_plan.md — 이행 계획서
+- docs/spec-kit/03_tasks.md — 태스크 분해
+- docs/summary.md — 작업 요약
+- docs/progress/session_context.md — 본 파일 (세션 컨텍스트)
 - 전역 문서(01_PRD.md, 02_SRS.md, 03_Architecture.md)는 미존재
-- 기존 SAD.md / SRS.md / SDS.md는 이미 완성 상태
 
 ### Spec-Kit 워크플로우 컨벤션
 - issue_type 분류: Architecture → epic 카테고리
@@ -32,25 +31,30 @@
 
 ### PLAYG-1370 [Architecture] ADR-1 Layered Architecture 채택
 - **요청**: 기본 구조를 위한 계획을 작성
-- **최신 !plan 산출물 (2026-04-14 갱신)**:
-  - `01_spec.md` (21,906 bytes): 4계층 10모듈 디렉토리 구조, 데이터 모델, 에러 클래스, 의존성 규칙, 9FR+3NFR, 6US+12TS
-  - `02_plan.md` (19,673 bytes): 갱신 완료 — 기본 구조 이행 계획으로 업데이트
-  - `03_tasks.md` (10,712 bytes): 갱신 완료 — 기본 구조 태스크로 업데이트
-  - `docs/summary.md`: 작성 완료
-- **Jira**: 댓글 게시 완료 (comment_id=11629)
-- **Git**: commit/push 대기 중
+- **산출물**: 01_spec.md, 02_plan.md, 03_tasks.md, summary.md
+- **Jira**: 댓글 게시 완료
+- **Git**: merge 완료 (PR #19)
+
+### PLAYG-1371 [Architecture] ADR-2 DICOM 파서 자체 구현
+- **요청**: 생성한 파일들을 꼭 push 해 주세요
+- **최신 !plan 산출물 (2026-04-15 갱신)**:
+  - 01_spec.md (14,473 bytes): DICOM Part 10 파서 코어, VR 파싱, 전송구문 처리, 검증 규칙
+  - 02_plan.md (14,115 bytes): 4 Phase 이행 계획 (코어→VR→전송구문→검증)
+  - 03_tasks.md (8,054 bytes): 태스크 분해 완료
+  - docs/summary.md: 작성 완료
+- **Jira**: 댓글 게시 완료 (comment_id=11645)
+- **Git**: feature/PLAYG-1371 브랜치, commit/push 진행 예정
 - **전역 문서 영향**: 없음 (미존재)
 
 ### PLAYG-1395 [Gate] ER Gate 검토
-- **요청**: docs 폴더 참고하여 검토 체크리스트 작성
-- **산출물**: 01_spec.md (23항목 체크리스트), 02_plan.md (5 Phase), 03_tasks.md (8개 태스크), summary.md
+- **산출물**: 01_spec.md, 02_plan.md, 03_tasks.md, summary.md
 - **Jira**: 댓글 게시 완료 (comment_id=11610)
-- **Git**: commit 3d871e6, branch feature/PLAYG-1395, push 완료
+- **Git**: commit 3d871e6, push 완료
 
 ## 3. 미완료 / Next Steps
 
-### PLAYG-1370 미완료 항목
-- [ ] Git commit 및 push (feature/PLAYG-1370 브랜치)
+### PLAYG-1371 미완료 항목
+- [ ] Git commit 및 push (feature/PLAYG-1371 브랜치)
 - [ ] 태스크 실제 구현 착수
 - [ ] 이행 계획에 따른 Phase 1 시작
 
