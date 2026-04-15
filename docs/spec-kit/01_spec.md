@@ -1,451 +1,376 @@
-# Simple CBCT Viewer - 기초 공사 명규서
+# Feature Specification: [ADR-2] DICOM 파서 자체 구현
 
-- **티켓**: PLAYG-1370
-- **문서 ID**: SPEC-PLAYG-1370
-- **작성일**: 2026-04-14
-- **제품**: Simple CBCT Viewer
-- **IEC 62304 안전 등급**: Class A
-- **부모 티켓**: PLAYG-1386
-- **이슈 유형**: Architecture
+**Feature Branch**: `PLAYG-1371-dicom-parser-impl`
+**Status**: Draft | **Date**: 2026-04-14
+**Ticket**: `PLAYG-1371` | **Type**: Architecture
+**Input**: SAD(PLAYG-1311)
 
 ---
 
 ## 1. 개요
 
 ### 1.1 목적
-
-본 문서는 PLAYG-1370 [ADR-1] Layered Architecture 채택 티켓의 실행 명규서이다.
-SAD(PLAYG-1311)에서 결정한 4계층 10모듈 Layered Architecture를 실제 프로젝트 코드로 구현하기 위한
-기초 공사 작업을 정의한다. 이 작업은 CBCT Viewer 본체 구현에 앞서 프로젝트 뾼대,
-공통 인프라, 모듈 인터페이스 타입 정의, 에러 처리 체계를 확립하는 것을 목적으로 한다.
+본 문서는 PLAYG-1371 [ADR-2] DICOM 파서 자체 구현 틹윓의 실행 명세서이다.
+SAD(PLAYG-1311)에서 결정한 ADR-2(DICOM 파서 자체 구현) 아키텍처 결정을
+실제 코드로 구현하기 위한 작업 범위, 사용자 스토리, 요구사항, 완료 기준을 정의한다.
+외부 DICOM 라이브러리(daikon.js, dicomParser 등)에 대한 의존을 제거하고,
+CBCT Viewer에 필요한 최소한의 DICOM 파싱 기능을 자체 구현하는 것을 목적으로 한다.
 
 ### 1.2 배경
+- SAD(PLAYG-1311) 7.3절 ADR-2에서 DICOM 파서 자체 구현을 아키텍처 결정으로 채택
+- SDS(PLAYG-1312) SDS-3.1 DICOMParser(COMP-1.1), SDS-3.2 DataValidator(COMP-1.2) 상세 설계 완료
+- SRS(PLAYG-1310) FR-5.4 서드파티 라이브러리 보안 감사 요구사항 수용
+- HAZ-3.1 외부 통신 차단 요구사항 수용
+- PLAYG-1370(ADR-1 기초 공사) 프로젝트 뾼대 및 모듈 스캐레톤 생성 완료
+### 1.3 ADR-2 결정 요약
 
-- SAD(PLAYG-1311)에서 ADR-1로 Layered Architecture를 채택
-- SDS(PLAYG-1312)에서 10개 컨포넌트(COMP-1.1 ~ COMP-4.2)의 상세 설계가 완료됨
-- 현재 소스 코드는 ER Gate 검토 도구(Python)만 존재하며 CBCT Viewer(JS) 본체 코드가 없음
-- 따라서 본격적인 모듈 구현 전 프로젝트 기초 설정이 선행되어야 함
+| 항목 | 내용 |
+|------|------|
+| 문제 상황 | 외부 DICOM 라이브러리 의존 시 보안 감사 부담 및 외부 통신 코드 포함 위험 |
+| 대안 검토 | daikon.js, dicomParser(cornerstone), 자체 구현 |
+| 최종 선택 | 자체 구현 |
+| 근거 | FR-5.4 보안 감사, HAZ-3.1 외부 통신 차단, SBOM 관리 용이 |
+| 영향 범위 | DICOMParser(COMP-1.1), DataValidator(COMP-1.2) |
 
-### 1.3 범위
+### 1.4 대안 분석
 
-| 항목 | 범위 | 비고 |
+| 대안 | 장점 | 단점 | 평가 |
+|------|------|------|------|
+| daikon.js | 기능 풍부, 검증됨 | 보안 감사 부담, 외부 통신 위험, 큼들 크기 | 기각 |
+| dicomParser | 의료영상 표준 | 외부 의존성, 보안 감사 필요 | 기각 |
+| 자체 구현 | 보안 감사 최소화, SBOM 단순 | 개발 공수, 표준 준수 검증 | 채택 |
+
+### 1.5 자체 구현 범위
+
+| 항목 | 포함 | 비고 |
 |------|------|------|
-| 프로젝트 디렉토리 구조 | 포함 | src/ 하위 4계층 분리 |
-| 모듈 파일 생성 | 포함 | 10개 모듈 .js 스캘레톤 |
-| 빌드 설정 (Vite) | 포함 | vite.config.js |
-| 테스트 설정 (Vitest) | 포함 | vitest.config.js |
-| 린트/포맷팅 (ESLint, Prettier) | 포함 | eslint.config.js, .prettierrc |
-| 공통 타입 정의 (JSDoc) | 포함 | types.js |
-| 에러 클래스 계층 | 포함 | errors.js |
-| 진입점 (index.html, main.js) | 포함 | 최소 동작 확인 |
-| 비즈니스 로직 구현 | 제외 | 후속 티켓 |
-| 렌더링 로직 구현 | 제외 | 후속 티켓 |
-| DICOM 파싱 구현 | 제외 | 후속 티켓 |
+| DICOM Part 10 형식 파싱 | 포함 | 프리엠블 + DICM + 메타헤더 + 데이터셋 |
+| 명시적 VR LE (1.2.840.10008.1.2.1) | 포함 | 기본 |
+| 암시적 VR LE (1.2.840.10008.1.2) | 포함 | 기본 |
+| Big Endian (1.2.840.10008.1.2.2) | 포함 | 읽기 전용 |
+| JPEG/JPEG2000/RLE 압축 해제 | 제외 | 후속 단계 |
 
-### 1.4 참조 문서
+### 1.6 지원 VR (Value Representation)
 
-| 문서 | 티켓 | 설명 |
+| VR | 이름 | 설명 |
+|----|------|------|
+| US | Unsigned Short | 부호 없는 16비트 정수 |
+| SS | Signed Short | 부호 있는 16비트 정수 |
+| UL | Unsigned Long | 부호 없는 32비트 정수 |
+| SL | Signed Long | 부호 있는 32비트 정수 |
+| FL | Float Single | 32비트 부동소수점 |
+| FD | Float Double | 64비트 북동소수점 |
+| DS | Decimal String | 십진수 문자열 |
+| IS | Integer String | 정수 문자열 |
+| LO | Long String | 김 문자열(최대 64자) |
+| SH | Short String | 짧은 문자열(최대 16자) |
+| PN | Person Name | 사람 이름 |
+| UI | Unique Identifier | UID |
+| CS | Code String | 코드 문자열 |
+| DA | Date | 날짜 |
+| TM | Time | 시간 |
+| DT | Date Time | 날짜 시간 |
+| SQ | Sequence of Items | 항목 시퀀스 |
+| OW | Other Word | 기타 워드 데이터 |
+| OB | Other Byte | 기타 바이트 데이터 |
+| UN | Unknown | 알 수 없는 VR |
+
+### 1.7 참조 문서
+
+| 문서 | 틹윓 | 설명 |
 |------|------|------|
-| SAD | PLAYG-1311 | 소프트웨어 아키텍처 명규서 |
-| SDS | PLAYG-1312 | 소프트웨어 상세 설계 명규서 |
-| SRS | PLAYG-1310 | 소프트웨어 요구사항 명규서 |
-| Development Plan | PLAYG-1231 | 개발 계획서 |
-| Classification | PLAYG-1290 | Class A 안전 등급 분류 |
-
+| SAD | PLAYG-1311 | 아키텍처 명세서 (ADR-2 결정) |
+| SDS | PLAYG-1312 | 상세 설계 (DICOMParser, DataValidator) |
+| SRS | PLAYG-1310 | 요구사항 명세서 |
+| 기초 공사 Spec | PLAYG-1370 | ADR-1 기초 공사 명세서 |
+| Dev Plan | PLAYG-1231 | 개발 계획서 |
 ---
 
 ## 2. User Scenarios & Testing
 
-### 2.1 사용자 스토리
+### User Story 1 -- DICOM Part 10 파일 파서 코어 구현 (Priority: P1) MVP
+- **설명**: DICOM Part 10 파일(프리엠블 128바이트 + DICM 매짝 바이트 + 파일 메타헤더 + 데이터셋)을 파싱하는 코어 엔진을 구현한다.
+- **Why this priority**: 모든 DICOM 파싱의 기반, 다른 모든 스토리의 전제 조건
+- **Independent Test**: 최소 DICOM Part 10 파일 입력 시 Transfer Syntax UID를 정확히 읽어오는지 단위 테스트 검증
+- **Acceptance Scenarios**:
+  1. **Given** 유효한 DICOM Part 10 파일, **When** parseDICOM() 호출, **Then** 프리엠블 건너뛰고 DICM 확인 후 메타헤더 파싱
+  2. **Given** DICM 매짝 바이트 없는 파일, **When** validateMagicByte() 호출, **Then** false 반환
+  3. **Given** 지원하지 않는 전송 구문(JPEG 압축), **When** validateTransferSyntax() 호출, **Then** 오류 반환
 
-#### US-001: 프로젝트 디렉토리 구조 생성
-- **역할**: 개발자
-- **우선순위**: P1
-- **스토리**: 개발자로서, 4계층 10모듈에 맞는 디렉토리 구조가 존재해야 한다.
-  그렇지 않으면 각 모듈을 독립적으로 개발하고 테스트할 수 없다.
-- **수용 조건**:
-  - src/ 하위에 data/, business/, rendering/, presentation/ 디렉토리가 존재한다
-  - 각 디렉토리에 해당 모듈 .js 파일이 존재한다
-  - 각 모듈 파일은 SAD에 정의된 공개 인터페이스를 JSDoc으로 선언한다 (구현은 stub)
-  - 테스트 디렉토리 구조가 소스 디렉토리를 미러링한다
+### User Story 2 -- 전송 구문 파서 (명시적/암시적 VR) (Priority: P1) MVP
+- **설명**: 명시적 VR LE(1.2.840.10008.1.2.1)와 암시적 VR LE(1.2.840.10008.1.2) 데이터 요소 파싱 구현
+- **Why this priority**: CBCT 영상 대부분이 비압축 LE 전송 구문 사용
+- **Independent Test**: 각 전송 구문 테스트 데이터로 태그/요소, VR, 길이, 값 파싱 검증
+- **Acceptance Scenarios**:
+  1. **Given** 명시적 VR LE 데이터 요소, **When** parseDataElement() 호출, **Then** 태그, VR, 길이, 값 정확히 파싱
+  2. **Given** 암시적 VR LE 데이터 요소, **When** parseDataElement() 호출, **Then** VR 없이 파싱, VR은 데이터 사전 조회
+  3. **Given** 알 수 없는 태그, **When** 파싱, **Then** 에러 발생 없이 UN VR로 처리
 
-#### US-002: 빌드 파이프라인 설정
-- **역할**: 개발자
-- **우선순위**: P1
-- **스토리**: 개발자로서, npm run dev/build 명령으로 즉시 개발과 빌드를 실행할 수 있어야 한다.
-  그렇지 않으면 개발을 시작할 수 없다.
-- **수용 조건**:
-  - npm run dev 실행 시 개발 서버가 정상 기동한다
-  - npm run build 실행 시 정적 산출물이 dist/에 생성된다
-  - 빌드 산출물에 외부 리소스 참조(CDN 등)가 없다 (ADR-5 준수)
-  - 빌드 산출물은 단일 HTML + 번들 JS/CSS로 구성된다
+### User Story 3 -- Big Endian 전송 구문 지원 (읽기 전용) (Priority: P2)
+- **설명**: Big Endian(1.2.840.10008.1.2.2) DICOM 파일 읽기 지원
+- **Why this priority**: DEPRECATED지만 레거시 파일 호환성 필요
+- **Independent Test**: Big Endian 테스트 데이터로 바이트 오더 변환 검증
+- **Acceptance Scenarios**:
+  1. **Given** Big Endian DICOM 파일, **When** parseDICOM() 호출, **Then** 비그 엔디언 바이트 오더로 모든 요소 파싱
+  2. **Given** Big Endian 멀티바이트 값, **When** 읽기, **Then** 올바른 바이트 스와핑 수행
 
-#### US-003: 테스트 인프라 구축
-- **역할**: 개발자
-- **우선순위**: P1
-- **스토리**: 개발자로서, npm run test로 Vitest가 실행되어야 한다.
-  그렇지 않으면 각 모듈의 단위 테스트를 즉시 작성할 수 없다.
-- **수용 조건**:
-  - npm run test 실행 시 Vitest가 정상 기동한다
-  - 각 모듈에 대해 최소 1개의 스모크 테스트가 존재한다
-  - 커버리지 리포트를 생성할 수 있다
+### User Story 4 -- DICOM 메타데이터 추출 (Priority: P1) MVP
+- **설명**: CBCT 영상 필수 DICOM 태그를 추출하여 DICOMMetadata 타입 반환
+- **Why this priority**: 메타데이터 없이는 렌더링, 측정, 검증 불가
+- **Independent Test**: 알려진 태그값 테스트 데이터로 DICOMMetadata 필드 검증
+- **Acceptance Scenarios**:
+  1. **Given** 환자 정보 태그 포함 파일, **When** parseMetadata() 호출, **Then** patientName, patientID 필드 정확히 채월
+  2. **Given** 영상 파라미터 태그 포함 파일, **When** parseMetadata() 호출, **Then** PixelSpacing, SliceThickness 파싱
+  3. **Given** 필수 태그 누락 파일, **When** parseMetadata() 호출, **Then** 누락 태그 목록을 errors 배열에 포함
 
-#### US-004: 코드 품질 도구 설정
-- **역할**: 개발자
-- **우선순위**: P2
-- **스토리**: 개발자로서, ESLint 및 Prettier가 설정되어 야 한다.
-  그렇지 않으면 코드 스타일 일관성과 정적 분석 기반 보안 검증을 수행할 수 없다.
-- **수용 조건**:
-  - npm run lint 실행 시 ESLint 검사가 수행된다
-  - npm run format 실행 시 Prettier 포맷팅이 적용된다
-  - ESLint 규칙에 네트워크 API(fetch, XMLHttpRequest, WebSocket) 사용 감지 규칙이 포함된다
-  - (NFR-2.2 정적 분석 보안 검증)
+### User Story 5 -- 픽셀 데이터 추출 및 복셀 데이터 변환 (Priority: P1) MVP
+- **설명**: DICOM 픽셀 데이터 태그(7FE0,0010)를 추출하여 BitsAllocated에 따른 TypedArray로 변환
+- **Why this priority**: 영상 렌더링 핵심 입력 데이터
+- **Independent Test**: 알려진 픽셀값 테스트 데이터로 복셀 데이터 추출 검증
+- **Acceptance Scenarios**:
+  1. **Given** 16비트 BitsAllocated 픽셀 데이터(OW), **When** parsePixelData() 호출, **Then** Int16Array/Uint16Array로 해석
+  2. **Given** 8비트 BitsAllocated 픽셀 데이터(OB), **When** parsePixelData() 호출, **Then** Uint8Array로 해석
+  3. **Given** 픽셀 데이터 태그 누락, **When** parsePixelData() 호출, **Then** ParseError 발생
+### User Story 6 -- DataValidator 검증 로직 구현 (Priority: P1) MVP
+- **설명**: DataValidator로 DICOM 헤더 검증, PixelSpacing 검증, 복셀값 범위 검증, 축방향 검증 수행
+- **Why this priority**: HAZ-1.1(DICOM 파싱 오류 영상 웄곡) 완화를 위해 데이터 검증 필수
+- **Independent Test**: 정상/비정상 메타데이터로 각 검증 메서드 통과/실패 검증
+- **Acceptance Scenarios**:
+  1. **Given** 유효한 PixelSpacing 값, **When** validatePixelSpacing() 호출, **Then** 검증 성공
+  2. **Given** PixelSpacing 누락 또는 0 이하, **When** validatePixelSpacing() 호출, **Then** 검증 실패 및 사유 반환
+  3. **Given** 복셀값 범위 이상 데이터, **When** validateVoxelRange() 호출, **Then** 이상치 탐지 결과 반환
+  4. **Given** ImageOrientationPatient 누락, **When** validateImageOrientation() 호출, **Then** 경고 및 기본 축 방향 제안
 
-#### US-005: 공통 데이터 모델 및 에러 체계 정의
-- **역할**: 개발자
-- **우선순위**: P1
-- **스토리**: 개발자로서, 공통 데이터 타입과 에러 클래스가 정의되어 야 한다.
-  그렇지 않으면 모듈 간 인터페이스 계약을 명확히 하고 일관된 에러 처리를 할 수 없다.
-- **수용 조건**:
-  - DICOMMetadata, VolumeData, SliceData, MeasurementData, ViewTransform 타입이 JSDoc으로 정의된다
-  - 커스텀 에러 클래스 계층(CBVError > ParseError/ValidationError/RenderError/SecurityError)이 정의된다
-  - 의존성 방향 규칙(상위 계층 > 하위 계층만 허용)이 문서화된다
+### User Story 7 -- SQ 시퀀스 파싱 지원 (Priority: P2)
+- **설명**: SQ VR 파싱으로 중첩 데이터셋 처리
+- **Why this priority**: 일부 CBCT 파일에서만 시퀀스 태그 포함되지만 완전한 파싱을 위해 필요
+- **Independent Test**: 중첩 시퀀스 테스트 데이터로 계층 구조 파싱 검증
+- **Acceptance Scenarios**:
+  1. **Given** SQ VR 데이터 요소, **When** 파싱, **Then** Item/ItemDelimiter 처리하여 중첩 데이터셋 파싱
+  2. **Given** 중첩 깊이 3 이상 시퀀스, **When** 파싱, **Then** 재귀적 파싱 정상 동작, 무한 루프 방지
 
-#### US-006: 애플리케이션 진입점 구성
-- **역할**: 개발자
-- **우선순위**: P1
-- **스토리**: 개발자로서, index.html과 main.js가 연결되어 전체 파이프라인이 동작하는지 확인할 수 있어야 한다.
-  그렇지 않으면 전체 파이프라인(빌드-실행-테스트)이 연결되었띌을 확인할 수 없다.
-- **수용 조건**:
-  - index.html에 진단 불가 경고 문구 영역이 포함된다 (FR-6.1)
-  - main.js에서 4계층 모듈을 import하여 초기화 순서를 보여준다
-  - SecurityGuard에 의해 CSP 정책이 적용된다 (FR-5.1)
+### User Story 8 -- 비표준 파일 오류 처리 및 타임아웃 (Priority: P1) MVP
+- **설명**: 비표준/손상 DICOM 파일 입력 시 명확한 오류 메시지 밌환 및 타임아웃 메커니즘 적용
+- **Why this priority**: HAZ-5.2(비표준 DICOM 기능 정지) 완화 및 사용자 경험 보호
+- **Independent Test**: 다양한 손상 파일 입력 시 적절한 오류 분류와 메시지 반환 검증
+- **Acceptance Scenarios**:
+  1. **Given** 중간에 잘린(truncated) 파일, **When** parseDICOM() 호출, **Then** ParseError 발생 및 명확한 메시지 반환
+  2. **Given** 타임아웃 초과 대용량 파일, **When** parseDICOM() 호출, **Then** 타임아웃 오류 발생 및 파싱 중단
+  3. **Given** 잘못된 VR 문자열, **When** 파싱, **Then** 복구 시도 후 실패 시 명확한 오류 메시지 반환
 
-### 2.2 테스트 시나리오
-
-| 시나리오 ID | 사용자 스토리 | 테스트 내용 | 우선순위 |
-|-------------|---------------|-------------|----------|
-| TS-001 | US-001 | 디렉토리 구조 검증: src/data/ business/ rendering/ presentation/ 존재 확인 | P1 |
-| TS-002 | US-001 | 10개 모듈 .js 파일 존재 및 JSDoc 인터페이스 export 확인 | P1 |
-| TS-003 | US-002 | npm run dev 실행 시 개발 서버 기동 확인 | P1 |
-| TS-004 | US-002 | npm run build 실행 시 dist/ 산출물 생성 및 외부 참조 부재 확인 | P1 |
-| TS-005 | US-003 | npm run test 실행 시 Vitest 기동 및 스모크 테스트 통과 | P1 |
-| TS-006 | US-003 | 각 모듈 스모크 테스트 존재 및 독립 실행 확인 | P1 |
-| TS-007 | US-004 | npm run lint 실행 시 ESLint 검사 수행 | P2 |
-| TS-008 | US-004 | 네트워크 API 사용 시 ESLint 경고 발생 확인 | P2 |
-| TS-009 | US-005 | types.js export 타입 JSDoc 구조 검증 | P1 |
-| TS-010 | US-005 | 에러 클래스 계층 구조 검증 | P1 |
-| TS-011 | US-006 | index.html 로드 시 진단 경고 영역 표시 확인 | P1 |
-| TS-012 | US-006 | main.js에서 4계층 모듈 import 및 초기화 순서 실행 확인 | P1 |
-
+### Edge Cases (엓지 케이스)
+- **EC-001**: 프리엠블 없이 DICM으로 시작하는 비표준 DICOM 파일
+- **EC-002**: 그룹 길이 요소(0000 그룹) 포함 파일
+- **EC-003**: 픽셀 데이터 길이와 예상 길이 불일치
+- **EC-004**: Private 태그(홀수 그룹 번호) 포함 파일
+- **EC-005**: 메타헤더 그룹(0002)과 데이터셋 간 전송 구문 불일치
+- **EC-006**: 0바이트 길이 데이터 요소
+- **EC-007**: Undefined Length(-1)의 픽셀 데이터 및 시퀀스
+- **EC-008**: BOM(Byte Order Mark) 포함 텍스트 VR 값
 ---
 
 ## 3. Requirements
 
-### 3.1 기능 요구사항
+### 3.1 기능 요구사항 (Functional Requirements)
 
-#### FR-INFRA-001: 디렉토리 구조 설계
+#### FR-DP-001: DICOM Part 10 파일 형식 파싱
 
-SAD의 4계층 10모듈 구조를 반영한 디렉토리 레이아웃을 생성해야 한다.
+DICOM Part 10 파일 형식을 파싱하는 코어 기능을 구현해야 한다.
 
-**목표 디렉토리 구조:**
-```
-src/
-  main.js                    # 애플리케이션 진입점
-  types.js                   # 공통 데이터 모델 타입 정의 (JSDoc)
-  errors.js                  # 커스텀 에러 클래스 계층
-  data/                      # Data Layer
-    DICOMParser.js           # COMP-1.1 (SDS-3.1)
-    DataValidator.js         # COMP-1.2 (SDS-3.2)
-    index.js                 # 계층 공개 인터페이스
-  business/                  # Business Layer
-    VolumeBuilder.js         # COMP-2.1 (SDS-3.3)
-    MeasurementEngine.js     # COMP-2.2 (SDS-3.7)
-    SecurityGuard.js         # COMP-2.3 (SDS-3.8)
-    index.js                 # 계층 공개 인터페이스
-  rendering/                 # Rendering Layer
-    MPRRenderer.js           # COMP-3.1 (SDS-3.4)
-    VolumeRenderer.js        # COMP-3.2 (SDS-3.5)
-    ViewTransformEngine.js   # COMP-3.3 (SDS-3.6)
-    index.js                 # 계층 공개 인터페이스
-  presentation/              # Presentation Layer
-    UIController.js          # COMP-4.1 (SDS-3.9)
-    ViewportManager.js       # COMP-4.2 (SDS-3.10)
-    index.js                 # 계층 공개 인터페이스
-tests/
-  unit/
-    data/
-      DICOMParser.test.js
-      DataValidator.test.js
-    business/
-      VolumeBuilder.test.js
-      MeasurementEngine.test.js
-      SecurityGuard.test.js
-    rendering/
-      MPRRenderer.test.js
-      VolumeRenderer.test.js
-      ViewTransformEngine.test.js
-    presentation/
-      UIController.test.js
-      ViewportManager.test.js
-    types.test.js
-    errors.test.js
-  e2e/
-    smoke.test.js
-```
+**세부 요구사항**:
+- **FR-DP-001-1**: 프리엠블 128바이트를 읽고 건너뛰어야 한다
+- **FR-DP-001-2**: 오프셋 128에서 DICM 매짝 바이트(4바이트)를 확인해야 한다. 누락 시 ParseError 발생 (FR-1.2)
+- **FR-DP-001-3**: 파일 메타헤더 그룹(그룹 0002)을 명시적 VR Little Endian으로 파싱
+- **FR-DP-001-4**: Transfer Syntax UID(0002,0010)을 추출하여 전송 구문 확인
+- **FR-DP-001-5**: 데이터셋을 확인된 전송 구문에 따라 파싱
 
-#### FR-INFRA-002: 모듈 스캘레톤 파일 생성
+**관련 SRS**: FR-1.1, FR-1.2, FR-7.2
+**관련 Hazard**: HAZ-1.1
+**관련 SDS**: SDS-3.1 DICOMParser
 
-각 모듈 .js 파일은 다음 구조를 가져야 한다:
-- 파일 상단에 JSDoc으로 SAD/SDS에 정의된 공개 인터페이스 선언
-- 클래스 선언 및 export default (구현은 stub/throw NotImplementedError)
-- 각 메서드는 지정된 파라미터와 반환 타입을 JSDoc에 명시
+#### FR-DP-002: 전송 구문 처리
 
-**모듈별 인터페이스 매핑:**
+3가지 비압축 전송 구문에 대한 데이터 요소 파싱을 구현해야 한다.
 
-| 모듈 | 파일 | 공개 메서드 | 관련 SRS |
-|------|------|-------------|----------|
-| DICOMParser | DICOMParser.js | parseDICOM(file: File) | FR-1.1 ~ FR-1.5 |
-| DataValidator | DataValidator.js | validateHeader(metadata), validatePixelSpacing(meta), validateVoxelRange(data), validateImageOrientation(meta) | FR-1.2, FR-1.4, FR-2.4, FR-4.2 |
-| VolumeBuilder | VolumeBuilder.js | buildVolume(voxelData, metadata), estimateMemory(fileSize), monitorMemoryUsage() | FR-1.4, FR-1.6, FR-7.4 |
-| MeasurementEngine | MeasurementEngine.js | measureDistance(p1, p2, transform), generateDisclaimer(), inverseTransform(coords, transform) | FR-4.1 ~ FR-4.4 |
-| SecurityGuard | SecurityGuard.js | blockNetworkRequests(), applyCSP(), enforceMemoryOnlyStorage(), releaseMemory(), auditDependencies() | FR-5.1 ~ FR-5.4 |
-| MPRRenderer | MPRRenderer.js | renderMPR(volume, plane, sliceIndex) | FR-2.1 ~ FR-2.4, FR-2.6 |
-| VolumeRenderer | VolumeRenderer.js | renderVolume(volume, options) | FR-2.5 |
-| ViewTransformEngine | ViewTransformEngine.js | applyTransform(type, params) | FR-3.1 ~ FR-3.4 |
-| UIController | UIController.js | checkBrowserSupport(), initUI(), showDiagnosticWarning() | FR-6.1, FR-6.2 |
-| ViewportManager | ViewportManager.js | layoutViewports() | FR-2.6 |
+**세부 요구사항**:
+- **FR-DP-002-1**: 명시적 VR Little Endian(1.2.840.10008.1.2.1) -- VR 필드를 직접 파싱
+- **FR-DP-002-2**: 암시적 VR Little Endian(1.2.840.10008.1.2) -- 데이터 사전에서 VR 조회
+- **FR-DP-002-3**: Big Endian(1.2.840.10008.1.2.2) -- 비그 엔디언 바이트 오더 적용 (읽기 전용)
+- **FR-DP-002-4**: 각 전송 구문별 데이터 요소 파싱 로직 구현 (Tag, VR, Length, Value)
+- **FR-DP-002-5**: 지원하지 않는 압축 전송 구문 감지 시 명확한 오류 반환
 
-#### FR-INFRA-003: 빌드 설정 (Vite 5.x)
+**관련 SRS**: FR-1.2, FR-7.2
 
-Vite 기반 빌드 설정을 구성해야 한다.
-- **설정 파일**: vite.config.js
-- **필수 구성 항목**:
-  - 입력: src/main.js
-  - 출력: dist/ 디렉토리
-  - 번들 형식: ES Module (ESM)
-  - 외부 의존성: 프로덕션 의존성 0개 (ADR-2 자체 구현 원칙)
-  - CSP 호환: inline script 최소화
-  - 소스맵: 개발 빌드에만 포함
-- **package.json 스크립트**:
-  - npm run dev: 개발 서버 기동
-  - npm run build: 프로덕션 빌드
-  - npm run preview: 빌드 산출물 미리보기
+#### FR-DP-003: DICOM 데이터 사전 구축
 
-#### FR-INFRA-004: 테스트 설정 (Vitest)
+CBCT 영상에 필요한 필수 태그 정보를 포함한 데이터 사전을 구축해야 한다.
 
-Vitest 기반 테스트 설정을 구성해야 한다.
-- **설정 파일**: vitest.config.js
-- **필수 구성 항목**:
-  - 테스트 환경: jsdom (DOM API 테스트용)
-  - 테스트 파일 패턴: tests/**/*.test.js
-  - 커버리지: v8 provider
-- **스모크 테스트**: 각 모듈에 대해 최소 1개 (import 가능 여부 확인)
-- **package.json 스크립트**:
-  - npm run test: 테스트 실행
-  - npm run test:coverage: 커버리지 리포트
+**세부 요구사항**:
+- **FR-DP-003-1**: CBCT 영상 필수 태그 최소 목록 정의:
+  파일 메타: (0002,0000) FileMetaLength, (0002,0001) FileMetaVersion, (0002,0010) TransferSyntax
+  환자: (0010,0010) PatientName, (0010,0020) PatientID, (0010,0030) BirthDate
+  스터디: (0008,0020) StudyDate, (0008,0030) StudyTime, (0008,1030) StudyDescription
+  영상 파라미터: (0018,0050) SliceThickness, (0018,0060) KVP, (0018,1151) XRayTubeCurrent
+  플셉셀 간격: (0028,0030) PixelSpacing
+  이미지 표현: (0020,0037) ImageOrientationPatient, (0020,0032) ImagePositionPatient
+  플셀 데이터: (0028,0010) Rows, (0028,0011) Columns, (0028,0008) NumberOfFrames
+  비트 표현: (0028,0100) BitsAllocated, (0028,0101) BitsStored, (0028,0102) HighBit, (0028,0103) PixelRepresentation
+  윈도우: (0028,1050) WindowCenter, (0028,1051) WindowWidth
+  발명 기준: (0018,0015) BodyPartExamined, (0008,0060) Modality
+- **FR-DP-003-2**: 사전에 없는 태그는 UN(Unknown) VR로 처리
+- **FR-DP-003-3**: 암시적 VR 파싱 시 데이터 사전을 VR 조회 소스로 사용
 
-#### FR-INFRA-005: 린트 및 포맷팅 설정
+**관련 SRS**: FR-1.3
+#### FR-DP-004: VR별 값 파싱 구현
 
-ESLint 9.x 및 Prettier 3.x 기반 코드 품질 도구를 설정해야 한다.
-- **ESLint 설정 파일**: eslint.config.js (Flat Config 형식)
-- **필수 ESLint 규칙**:
-  - ES2020+ 문법 검사
-  - 네트워크 API 사용 금지 감지 규칙 (no-restricted-globals 또는 칌스텀 규칙)
-  - 대상: fetch, XMLHttpRequest, WebSocket, navigator.sendBeacon
-  - (NFR-2.2 정적 분석 보안 검증 준수)
-- **Prettier 설정 파일**: .prettierrc
-  - 인덴트: 2칸
-  - 디지트: 배제
-  - 디원파일 남기기
-- **package.json 스크립트**:
-  - npm run lint: ESLint 검사
-  - npm run format: Prettier 포맷팅
+20개 VR에 대한 값 파싱을 구현해야 한다.
 
-#### FR-INFRA-006: 공통 데이터 모델 타입 정의 (JSDoc)
+**세부 요구사항**:
+- **FR-DP-004-1**: 숫자 VR(US, SS, UL, SL, FL, FD) -- DataView 메서드로 바이너리 읽기
+- **FR-DP-004-2**: 문자열 숫자 VR(DS, IS) -- 문자열 파싱 후 parseFloat/parseInt 변환
+- **FR-DP-004-3**: 문자열 VR(LO, SH, PN, UI, CS, DA, TM, DT) -- 패딩 제거 후 문자열 반환
+- **FR-DP-004-4**: 바이너리 VR(OB, OW, UN) -- ArrayBuffer 그대로 반환
+- **FR-DP-004-5**: SQ VR -- 재귀적 데이터셋 파싱 (Item 태그 FFFE,E000 처리)
+- **FR-DP-004-6**: 멀티밸류(multi-value) 처리 -- DS, IS 등 역슬래시 구분자 처리
 
-SAD 5.2의 데이터 모델을 JSDoc 타입 주석으로 정의해야 한다.
-- **파일**: src/types.js
-- **정의할 타입**:
+#### FR-DP-005: 메타데이터 추출 및 DICOMMetadata 생성
 
-| 타입 이름 | 필드 | 설명 | 관련 컨포넌트 |
-|------------|-------|------|----------------|
-| @typedef {Object} DICOMMetadata | patientName, patientID, studyDate, modality, pixelSpacing, sliceThickness, imageOrientationPatient, rows, columns, numberOfFrames, bitsAllocated, transferSyntax, windowCenter, windowWidth | DICOM 파일 메타 데이터 | DICOMParser, DataValidator |
-| @typedef {Object} VolumeData | voxelArray (ArrayBuffer), dimensions [x,y,z], spacing [x,y,z], origin [x,y,z], dataType, minMaxValue [min,max] | 3차원 볼륨 데이터 | VolumeBuilder |
-| @typedef {Object} SliceData | imageData (ImageData), plane (Axial|Coronal|Sagittal), sliceIndex, windowLevel, windowWidth | MPR 단면 영상 데이터 | MPRRenderer |
-| @typedef {Object} MeasurementData | startPoint [x,y,z], endPoint [x,y,z], distanceMM, pixelSpacingValid, disclaimerText | 거리 측정 결과 | MeasurementEngine |
-| @typedef {Object} ViewTransform | zoom, panX, panY, windowLevel, windowWidth, sliceIndex | 뷰 변환 상태 | ViewTransformEngine |
+파싱된 태그 데이터에서 DICOMMetadata 타입 객체를 생성해야 한다.
 
-#### FR-INFRA-007: 커스텀 에러 클래스 계층 정의
+**세부 요구사항**:
+- **FR-DP-005-1**: DICOMMetadata 타입의 모든 필드를 채워야 한다 (types.js 정의 준수)
+- **FR-DP-005-2**: 필수 필드 누락 시 errors 배열에 누락 태그 정보 기록
+- **FR-DP-005-3**: PixelSpacing(0028,0030)을 배열 [row, column]로 파싱 (역슬래시 \ 구분자)
+- **FR-DP-005-4**: ImageOrientationPatient(0020,0037)을 6요소 배열로 파싱 (DS VR 멀티밸류)
+- **FR-DP-005-5**: WindowCenter/WindowWidth(0028,1050/1051) 파싱 (다중 값 지원)
 
-모듈 간 일관된 에러 처리를 위한 커스텀 에러 클래스 계층을 정의해야 한다.
-- **파일**: src/errors.js
-- **클래스 계층 구조**:
-  - CBVError (Error 확장) - 기본 클래스
-    - ParseError - DICOM 파싱 오류 (FR-1.5, HAZ-1.1)
-    - ValidationError - 데이터 검증 오류 (FR-1.2, FR-4.2)
-    - RenderError - 렌더링 오류 (FR-2.5, HAZ-1.3)
-    - SecurityError - 보안 정책 위반 (FR-5.1, HAZ-3.1)
-    - MemoryError - 메모리 초과 (FR-1.6, HAZ-5.1)
-- **각 에러 클래스에 포함될 정보**:
-  - message: 사람이 읽기 쉽다는 오류 메시지
-  - code: 기계적으로 처리 가능한 에러 코드
-  - context: 추가 정보 (파일명, 메타 데이터 등)
+**관련 SRS**: FR-1.3
+**관련 SDS**: SDS-3.1 parseMetadata()
 
-#### FR-INFRA-008: 의존성 방향 규칙
+#### FR-DP-006: 플셀 데이터 추출
 
-Layered Architecture의 핵심 규칙인 의존성 방향을 정의하고 문서화해야 한다.
-- **허용 방향**: Presentation -> Rendering -> Business -> Data
-  - Presentation Layer는 Rendering Layer와 Business Layer(VerticalSlice)를 참조할 수 있다
-  - Rendering Layer는 Business Layer를 참조할 수 있다
-  - Business Layer는 Data Layer를 참조할 수 있다
-- **금지 방향**:
-  - 하위 계층이 상위 계층을 직접 import할 수 없다
-  - Data Layer는 Business, Rendering, Presentation Layer를 import할 수 없다
-  - 동일 계층 내 모듈 간 참조는 최소화한다
-- **예외**: SecurityGuard는 모든 계층에서 참조 가능하다 (Cross-Cutting Concern)
-- **검증 방법**: ESLint no-restricted-imports 규칙로 검증
+DICOM 플셀 데이터를 추출하여 처리 가능한 형태로 반환해야 한다.
 
-#### FR-INFRA-009: 애플리케이션 진입점 구성
+**세부 요구사항**:
+- **FR-DP-006-1**: 플셀 데이터 태그(7FE0,0010)을 찾아 ArrayBuffer로 추출
+- **FR-DP-006-2**: BitsAllocated(0028,0100)에 따라 8/16/32비트 TypedArray 변환
+- **FR-DP-006-3**: PixelRepresentation(0028,0103)에 따라 signed/unsigned 결정
+- **FR-DP-006-4**: 플셀 데이터 누락 시 ParseError 발생
+- **FR-DP-006-5**: 플셀 데이터 길이와 예상 길이(Rows*Columns*Frames*BytesPerPixel) 비교, 불일치 시 경고 기록
 
-index.html 및 main.js 진입점을 구성해야 한다.
+**관련 SRS**: FR-1.4
+**관련 Hazard**: HAZ-1.1
 
-**index.html 필수 요소**:
-- DOCTYPE html5 선언
-- meta charset utf-8
-- CSP 메타 태그 (SecurityGuard 동적 설정과 볼행)
-- 진단 불가 경고 문구 영역 (id="diagnostic-warning") (FR-6.1)
-- 뷰포트 컨테이너 영역 (MPR 3단면 + 3D)
-- 스크립트 로드: src/main.js (type=")모듈")
+#### FR-DP-007: 데이터 검증 (DataValidator)
 
-**main.js 초기화 순서**:
-1. SecurityGuard.applyCSP() - 보안 정책 적용
-2. SecurityGuard.blockNetworkRequests() - 외부 통신 차단
-3. UIController.checkBrowserSupport() - 브라우저 호환성 검사
-4. UIController.showDiagnosticWarning() - 진단 불가 경고 표시
-5. ViewportManager.layoutViewports() - 뷰포트 레이아웃
-6. 이벤트 리스너 등록 (DICOM 파일 선택 등)
+파싱된 DICOM 데이터의 무결성과 일관성을 검증해야 한다.
 
-### 3.2 비기능 요구사항
+**세부 요구사항**:
+- **FR-DP-007-1**: 필수 태그 존재 여부 검증 (PatientID, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID)
+- **FR-DP-007-2**: VR(Value Representation) 형식 위반 검출
+- **FR-DP-007-3**: 값 범위 검증 (예: Rows > 0, BitsAllocated in {8,16,32})
+- **FR-DP-007-4**: 파일 메타헤더 일관성 검증 (FileMetaVersion, TransferSyntaxUID)
+- **FR-DP-007-5**: 검증 결과를 ValidationError 배열로 반환 (태그, 메시지, 심각도)
 
-#### NFR-INFRA-001: IEC 62304 Class A 준수 사항
+**관련 SRS**: FR-5.4
+**관련 Hazard**: HAZ-3.1
+**관련 SDS**: SDS-3.2 DataValidator
 
-| 요구 항목 | 상세 설명 | 관련 규격 |
-|------------|------------|----------------|
-| 소스 코드 수명 관리 | Git 버전 관리로 모든 상세 설계 변경 추적 | IEC 62304 제8.1.2 |
-| 모듈 단위 테스트 | 각 모듈에 대해 독립적인 단위 테스트 가능 | IEC 62304 제5.5.3 |
-| 정적 분석 | ESLint로 코드 품질 및 보안 검증 | IEC 62304 제5.5.5 |
-| 구성 관리 | package.json과 lock 파일로 의존성 고정 | IEC 62304 제8.1.4 |
-| 문서화 | JSDoc 주석으로 공개 API 문서화 | IEC 62304 제5.4.3 |
+#### FR-DP-008: 파싱 타임아웃 및 안전 장치
 
-#### NFR-INFRA-002: 기술 스택 요구사항
+악의적이거나 손상된 파일로 인한 무한 루프나 메모리 고갈을 방지해야 한다.
 
-| 구분 | 기술 | 버전 | 요구 사온 |
-|--------|--------|--------|------------|
-| 프로그래밍 언어 | JavaScript | ES2020+ | IU-08, SR-10 |
-| 3D 렌더링 | WebGL | 2.0 | SR-4, ADR-4 |
-| 빌드 도구 | Vite | 5.x | DP-02 |
-| 테스트 | Vitest | 최신 | DP-02 |
-| 정적 분석 | ESLint | 9.x | DP-02, NFR-2.2 |
-| 포맷팅 | Prettier | 3.x | DP-02 |
-| 패키지 관리 | npm | 10.x | DP-02 |
-| 버전 관리 | Git + GitHub | - | CMP-02 |
+**세부 요구사항**:
+- **FR-DP-008-1**: 최대 파싱 시간 타임아웃 설정 (기본값 30초)
+- **FR-DP-008-2**: 최대 데이터 요소 개수 제한 (기본값 10,000개)
+- **FR-DP-008-3**: 최대 중첩 깊이 제한 (SQ 시퀀스, 기본값 16레벨)
+- **FR-DP-008-4**: 파일 크기 상한 검사 (기본값 2GB)
+- **FR-DP-008-5**: 타임아웃/한계 초과 시 명확한 ParseError 반환
 
-#### NFR-INFRA-003: 보안 요구사항
+**관련 SRS**: NFR-2.1, NFR-2.2
+**관련 Hazard**: HAZ-1.1
 
-| 요구 항목 | 상세 설명 | 관련 SRS |
-|------------|------------|---------|
-| 외부 통신 차단 | ESLint 규칙로 fetch, XMLHttpRequest, WebSocket 사용 감지 | FR-5.1, NFR-2.2 |
-| CSP 정책 | 빌드 산출물에 CSP 헤더 포함 | NFR-2.1 |
-| 의존성 최소화 | 프로덕션 의존성 0개 | FR-5.4, ADR-2 |
-| 데이터 불변성 | 데이터 타입은 불변객체(Object.freeze) 구조 | FR-5.2 |
+### 3.2 비기능 요구사항 (Non-Functional Requirements)
 
----
+#### NFR-DP-001: 보안 -- 외부 의존성 제로
+
+DICOM 파서는 어떠한 외부 라이브러리에도 의존하지 않아야 한다.
+
+**세부 요구사항**:
+- **NFR-DP-001-1**: package.json에 DICOM 관련 외부 의존성이 없어야 한다
+- **NFR-DP-001-2**: 네트워크 API (fetch, XMLHttpRequest, WebSocket) 호출이 없어야 한다
+- **NFR-DP-001-3**: SBOM(Software Bill of Materials)에 DICOM 파서 관련 항목이 자체 구현으로만 표기
+- **NFR-DP-001-4**: ESLint 보안 규칙으로 외부 통신 코드 포함 여부 자동 검증
+
+**관련 SRS**: FR-5.4, HAZ-3.1
+**ADR 근거**: 보안 감사 부담 최소화, 외부 통신 코드 포함 위험 제거
+
+#### NFR-DP-002: 성능
+
+CBCT 영상 파일을 합리적인 시간 내에 파싱해야 한다.
+
+**세부 요구사항**:
+- **NFR-DP-002-1**: 100MB 이하 CBCT 파일 파싱 시 5초 이내 완료
+- **NFR-DP-002-2**: 메타데이터만 추출하는 경우 1초 이내 완료
+- **NFR-DP-002-3**: ArrayBuffer 기반 처리로 메모리 복사 최소화
+- **NFR-DP-002-4**: DataView를 활용한 엔디안 변환 (추가 버퍼 할당 없음)
+
+**관련 SRS**: NFR-1
+
+#### NFR-DP-003: 확장성
+
+향후 압축 전송 구문(JPEG, JPEG2000, RLE) 추가가 용이하도록 설계해야 한다.
+
+**세부 요구사항**:
+- **NFR-DP-003-1**: 전송 구문 파서를 Strategy 패턴으로 분리
+- **NFR-DP-003-2**: 새로운 VR 추가 시 기존 코드 수정 없이 확장 가능
+- **NFR-DP-003-2**: 파서 인터페이스를 통해 구현 교체 가능
+
+**관련 SRS**: NFR-3
+
+### 3.3 제약사항
+
+- **C-01**: JavaScript(ES2022+)만 사용, TypeScript 도입 없음
+- **C-02**: 브라우저 환경 전용 (Node.js 미지원)
+- **C-03**: Web Workers에서도 실행 가능해야 함 (DOM 의존 없음)
+- **C-04**: IEC 62304 Class A 준수
+- **C-05**: 압축 전송 구문(JPEG, JPEG2000, RLE)은 후속 티켓에서 다룸
+- **C-06**: DICOM 네트워크 프로토콜(DIMSE)은 범위 외
 
 ## 4. Success Criteria
 
-### 4.1 필수 달성 조건 (P1 - 모두 충족 필요)
+### 4.1 기능 검증 기준
 
-| 기준 ID | 달성 조건 | 검증 방법 | 관련 US |
-|----------|------------|------------|---------|
-| SC-01 | src/ 하위 4개 계층 디렉토리가 존재한다 | 디렉토리 존재 확인 | US-001 |
-| SC-02 | 10개 모듈 .js 파일이 JSDoc 인터페이스를 export한다 | 파일 존재 및 JSDoc 가능 확인 | US-001 |
-| SC-03 | npm run dev 개발 서버가 정상 기동한다 | 명령 실행 및 브라우저 접근 | US-002 |
-| SC-04 | npm run build 가 dist/ 산출물을 생성하고 외부 참조가 없다 | 빌드 실행 및 HTML 내 외부 URL 검색 | US-002 |
-| SC-05 | npm run test가 모든 스모크 테스트를 통과한다 | 명령 실행 및 결과 확인 | US-003 |
-| SC-06 | types.js에 5개 데이터 타입(DICOMMetadata, VolumeData, SliceData, MeasurementData, ViewTransform)이 정의되어 있다 | JSDoc 구조 검증 | US-005 |
-| SC-07 | errors.js에 CBVError 계층(5개 하위 클래스)이 정의되어 있다 | 클래스 구조 검증 | US-005 |
-| SC-08 | index.html에 진단 불가 경고 영역(id=")이 포함되어 있다 | HTML 구조 검증 | US-006 |
-| SC-09 | main.js가 4계층 모듈을 import하고 초기화 순서를 실행한다 | 코드 검증 및 실행 확인 | US-006 |
+| ID | 검증 항목 | 검증 방법 | 관련 FR |
+|------|----------|-----------|--------|
+| SC-01 | Part 10 파일 128바이트 프리앰블 + DICM 매직 감지 | 단위 테스트 (정상/비정상 파일) | FR-DP-001 |
+| SC-02 | 명시적 VR LE 파싱 정확성 | 태그-VR-값 일치 검증 테스트 | FR-DP-002 |
+| SC-03 | 암시적 VR LE 파싱 정확성 | 데이터 사전 기반 VR 조회 검증 | FR-DP-002 |
+| SC-04 | Big Endian 파싱 정확성 | 엔디안 변환 검증 테스트 | FR-DP-002 |
+| SC-05 | 20개 VR 값 파싱 정확성 | VR별 파싱 테스트 (숫자/문자열/바이너리/SQ) | FR-DP-004 |
+| SC-06 | DICOMMetadata 객체 생성 완전성 | 필수 필드 전수 검증 테스트 | FR-DP-005 |
+| SC-07 | 픽셀 데이터 TypedArray 변환 정확성 | BitsAllocated/PixelRepresentation별 테스트 | FR-DP-006 |
+| SC-08 | DataValidator 검증 결과 반환 | 필수 태그 누락/범위 위반/VR 위반 테스트 | FR-DP-007 |
+| SC-09 | 타임아웃 및 한계 동작 | 대용량 파일/과도한 태그/깊은 중첩 테스트 | FR-DP-008 |
 
-### 4.2 권장 달성 조건 (P2 - 권장 필요)
+### 4.2 비기능 검증 기준
 
-| 기준 ID | 달성 조건 | 검증 방법 | 관련 US |
-|----------|------------|------------|---------|
-| SC-10 | npm run lint가 ESLint 검사를 수행한다 | 명령 실행 | US-004 |
-| SC-11 | 네트워크 API 사용 시 ESLint가 경고를 발생시킨다 | 의도적 용타 비표준 API 사용 후 검증 | US-004 |
-| SC-12 | 커버리지 리포트가 생성된다 | npm run test:coverage 실행 | US-003 |
-| SC-13 | 각 계층 index.js가 계층 내 모듈을 통합 export한다 | import 구조 검증 | US-001 |
+| ID | 검증 항목 | 검증 방법 | 관련 NFR |
+|------|----------|-----------|---------|
+| SC-10 | 외부 의존성 제로 | package.json 점검 + ESLint 검증 | NFR-DP-001 |
+| SC-11 | 100MB 파일 5초 이내 파싱 | 성능 벤치마크 테스트 | NFR-DP-002 |
+| SC-12 | Strategy 패턴 기반 전송 구문 교체 | 아키텍처 리뷰 | NFR-DP-003 |
 
-### 4.3 비계
+### 4.3 추적성 매트릭스 (Traceability)
 
-- 모든 P1 기준 달성 시 기초 공사 완료
-- P2 기준 중 1개 이상 미달성 시 개선 권고 필요
-- P1 기준 중 1개 이상 미달성 시 기초 공사 불합격
-
----
-
-## 5. 추사성 매트릭스
-
-### 5.1 요구사항 -> 사용자 스토리 매핑
-
-| 요구사항 | 관련 US | 관련 테스트 |
-|------------|---------|-------------|
-| FR-INFRA-001 | US-001 | TS-001, TS-002 |
-| FR-INFRA-002 | US-001 | TS-002 |
-| FR-INFRA-003 | US-002 | TS-003, TS-004 |
-| FR-INFRA-004 | US-003 | TS-005, TS-006 |
-| FR-INFRA-005 | US-004 | TS-007, TS-008 |
-| FR-INFRA-006 | US-005 | TS-009 |
-| FR-INFRA-007 | US-005 | TS-010 |
-| FR-INFRA-008 | US-005 | - (문서가 검증) |
-| FR-INFRA-009 | US-006 | TS-011, TS-012 |
-| NFR-INFRA-001 | - | 전이 |
-| NFR-INFRA-002 | US-002, US-003, US-004 | 전이 |
-| NFR-INFRA-003 | US-004, US-006 | TS-008, TS-011 |
-
-### 5.2 SRS -> 기초 공사 요구사항 매핑
-
-| SRS 요구사항 | 기초 공사 연관 요구사항 |
-|--------------|--------------------|
-| FR-1.1 ~ FR-1.5 | FR-INFRA-002 (DICOMParser 인터페이스 정의) |
-| FR-1.2, FR-1.4 | FR-INFRA-002 (DataValidator 인터페이스 정의) |
-| FR-1.6, FR-7.4 | FR-INFRA-002 (VolumeBuilder.estimateMemory) |
-| FR-2.1 ~ FR-2.6 | FR-INFRA-002 (MPRRenderer, VolumeRenderer 인터페이스 정의) |
-| FR-3.1 ~ FR-3.4 | FR-INFRA-002 (ViewTransformEngine 인터페이스 정의) |
-| FR-4.1 ~ FR-4.4 | FR-INFRA-002 (MeasurementEngine 인터페이스 정의) |
-| FR-5.1 ~ FR-5.4 | FR-INFRA-002 (SecurityGuard), FR-INFRA-009 (CSP 적용) |
-| FR-6.1 | FR-INFRA-009 (진단 경고 영역) |
-| FR-6.2 | FR-INFRA-009 (브라우저 감지) |
-| FR-7.1 | FR-INFRA-003 (외부 참조 없는 빌드) |
-| NFR-2.1 | FR-INFRA-009 (CSP 메타 태그) |
-| NFR-2.2 | FR-INFRA-005 (네트워크 API 감지 규칙) |
-
----
-
-## 6. 결론
-
-본 명규서는 PLAYG-1370 [ADR-1] Layered Architecture 채택 티켓의 실행 계획을 정의한다.
-기초 공사는 후속 모듈 구현 티켓들의 기반이 되며, 다음 작업들을 선행해야 한다:
-
-1. 프로젝트 디렉토리 구조 및 모듈 스캘레톤 생성
-2. Vite, Vitest, ESLint, Prettier 설정
-3. 공통 데이터 타입 및 에러 클래스 구현
-4. 진입점(index.html, main.js) 구성
-5. 모든 테스트 시나리오 통과 확인
-
-기초 공사 완료 후, 각 모듈의 실제 구현은 별도 티켓으로 진행된다.
-
----
-
-*문서 끝*
+| SRS ID | ADR-2 Spec ID | SDS 참조 | HAZ 참조 |
+|--------|--------------|---------|----------|
+| FR-1.1 | FR-DP-001 | SDS-3.1 | HAZ-1.1 |
+| FR-1.2 | FR-DP-002 | SDS-3.1 | - |
+| FR-1.3 | FR-DP-005 | SDS-3.1 | - |
+| FR-1.4 | FR-DP-006 | SDS-3.1 | HAZ-1.1 |
+| FR-5.4 | FR-DP-007, NFR-DP-001 | SDS-3.2 | HAZ-3.1 |
+| FR-7.2 | FR-DP-002 | SDS-3.1 | - |
+| NFR-1 | NFR-DP-002 | - | - |
+| NFR-2 | NFR-DP-001, FR-DP-008 | - | HAZ-3.1 |
+| NFR-3 | NFR-DP-003 | - | - |

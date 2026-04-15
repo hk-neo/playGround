@@ -1,21 +1,20 @@
-## PLAYG-1370 !plan 작업 요약
+## PLAYG-1371 !plan 작업 요약
 
 ### 실행 경로
 - 티켓 유형: Architecture (epic 카테고리)
-- 선택된 경로: epic (Spec-Kit 3종 갱신)
-- 전역 문서(01_PRD.md, 02_SRS.md, 03_Architecture.md) 미존재 → 영향 없음
+- 선택된 경로: epic/story (전역 문서 영향 없음 → Spec-Kit 3종 유지)
+- 특이사항: 기존 산출물(01_spec.md, 02_plan.md, 03_tasks.md)이 이미 존재하여 내용 확인 후 유지 결정
+- 요청: 생성한 파일들을 꼭 push
 
-### 사용자 요청
-- command_args: 기본 구조를 위한 계획을 작성
-
-### 생성된 산출물
-- docs/spec-kit/01_spec.md (21,906 bytes) — 기존 유지, 기본 구조 계획 초점 재확인
-- docs/spec-kit/02_plan.md (19,673 bytes) — 갱신 완료, 기본 구조 구축 계획 반영
-- docs/spec-kit/03_tasks.md (10,712 bytes) — 갱신 완료, 태스크 분해 재조정
+### 생성/유지된 산출물
+- docs/spec-kit/01_spec.md (14,473 bytes) — 유지: ADR-2 DICOM 파서 자체 구현 스펙
+- docs/spec-kit/02_plan.md (14,115 bytes) — 유지: 이행 계획서
+- docs/spec-kit/03_tasks.md (8,054 bytes) — 유지: 태스크 분해
+- docs/summary.md — 신규 작성 (본 파일)
 
 ### 전역 문서 갱신
 - 없음 (01_PRD.md, 02_SRS.md, 03_Architecture.md 미존재)
 
-### 비고
-- 기존 01_spec.md 내용이 이미 기본 구조(디렉토리 레이아웃, 모듈 스캘레톤, 빌드/테스트/린트 인프라)를 포함
-- command_args 요청과 기존 범위가 동일하여 갱신 중심으로 처리
+### Git
+- Branch: feature/PLAYG-1371
+- Commit & Push: 진행 예정
