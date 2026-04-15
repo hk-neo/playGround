@@ -13,6 +13,10 @@
 - **요구사항**: 9FR + 3NFR (보안/성능/확장성)
 - **검증 기준**: 6US + 12TS
 
+### ADR-2: DICOM 파서 자체 구현
+- DICOM Part 10 포맷 파서 코어, VR 파싱, 전송구문 처리, 검증 규칙
+- 4 Phase 이행 계획 (코어→VR→전송구문→검증)
+
 ### 프로젝트 문서 구조
 - docs/spec-kit/01_spec.md — 스펙 정의서
 - docs/spec-kit/02_plan.md — 이행 계획서
@@ -30,14 +34,12 @@
 ## 2. 해결 완료된 주요 이슈 및 기술 스택
 
 ### PLAYG-1370 [Architecture] ADR-1 Layered Architecture 채택
-- **요청**: 기본 구조를 위한 계획을 작성
 - **산출물**: 01_spec.md, 02_plan.md, 03_tasks.md, summary.md
 - **Jira**: 댓글 게시 완료
 - **Git**: merge 완료 (PR #19)
 
 ### PLAYG-1371 [Architecture] ADR-2 DICOM 파서 자체 구현
-- **요청**: 생성한 파일들을 꼭 push 해 주세요
-- **최신 !plan 산출물 (2026-04-15 갱신)**:
+- **산출물** (2026-04-15 갱신):
   - 01_spec.md (14,473 bytes): DICOM Part 10 파서 코어, VR 파싱, 전송구문 처리, 검증 규칙
   - 02_plan.md (14,115 bytes): 4 Phase 이행 계획 (코어→VR→전송구문→검증)
   - 03_tasks.md (8,054 bytes): 태스크 분해 완료
@@ -51,12 +53,28 @@
 - **Jira**: 댓글 게시 완료 (comment_id=11610)
 - **Git**: commit 3d871e6, push 완료
 
+### PLAYG-1375 [COMP-1.1] DICOM 파일 파서
+- **티켓**: PLAYG-1375 | issue_type: Architecture | parent: PLAYG-1385 ([SDS-3.1] DICOMParser 상세 설계)
+- **산출물**:
+  - 01_spec.md (15,746 bytes): 5개 User Scenario, 6개 공개 인터페이스, IEC 62304 Class A 준수
+  - 02_plan.md (24,410 bytes): 6 Phase 구현 계획
+  - 03_tasks.md (29,077 bytes): 23개 태스크 (총 31.5시간 예상)
+  - docs/summary.md: 작업 요약
+- **경로**: epic/story → 전역 문서 영향 없음 → Spec-Kit 3종만 생성
+- **Jira**: 댓글 게시 완료 (comment_id=11654)
+- **Git**: commit/push 예정
+
 ## 3. 미완료 / Next Steps
 
 ### PLAYG-1371 미완료 항목
 - [ ] Git commit 및 push (feature/PLAYG-1371 브랜치)
 - [ ] 태스크 실제 구현 착수
 - [ ] 이행 계획에 따른 Phase 1 시작
+
+### PLAYG-1375 미완료 항목
+- [ ] Git commit 및 push
+- [ ] 태스크 실제 구현 착수
+- [ ] 6 Phase 구현 계획에 따른 Phase 1 시작
 
 ### 일반
 - [ ] 전역 문서(01_PRD.md 등) 생성 필요 여부는 추후 프로젝트 요구사항에 따라 결정
