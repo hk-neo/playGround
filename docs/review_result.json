@@ -5,114 +5,79 @@
   "issues": [
     {
       "id": "ARCH-1",
-      "severity": "HIGH",
-      "description": "01_spec.md 5.2절 VR을 Volume Representation으로 오기. DICOM 표준에서 VR은 Value Representation임. 의료기기 규제 문서에서 표준 용어 오기.",
-      "file": "docs/spec-kit/01_spec.md",
-      "fixed": true
+      "severity": "MEDIUM",
+      "description": "metadataParser/maskPhiFields: maskPhiFields가 전달된 metadata 객체를 직접 변이(mutate)함. 함수형 원칙 위반. 호출부에서 원본 객체를 보존할 수 없음.",
+      "file": "viewer/src/data/dicomParser/metadataParser.js L128 / phiGuard.js",
+      "fixed": false
     },
     {
       "id": "ARCH-2",
       "severity": "MEDIUM",
-      "description": "02_plan.md 상수 정의에 DICOM_MAGIC_BYTE_OFFSET과 PREAMBLE_LENGTH 혼동 가능. 명명 명확화 필요.",
-      "file": "docs/spec-kit/02_plan.md",
-      "fixed": false
-    },
-    {
-      "id": "ARCH-3",
-      "severity": "MEDIUM",
-      "description": "02_plan.md는 Phase 1~6, 03_tasks.md는 Phase 1~5로 넘버링 불일치.",
-      "file": "docs/spec-kit/03_tasks.md",
-      "fixed": false
-    },
-    {
-      "id": "ARCH-4",
-      "severity": "HIGH",
-      "description": "01_spec.md에 PARSE_ERR_FILE_TOO_LARGE 에러 코드 누락. tasks에서 7개로 확장되나 spec에 6개만 정의.",
-      "file": "docs/spec-kit/01_spec.md",
+      "description": "parseDICOM.js 주석 '2. 파일 읽기' 단계 번호가 중복됨 (1번 이후 2번이 두 번 나옴). 코드 가독성 저하.",
+      "file": "viewer/src/data/dicomParser/parseDICOM.js L39, L43",
       "fixed": true
-    },
-    {
-      "id": "ARCH-5",
-      "severity": "MEDIUM",
-      "description": "02_plan.md 에러 코드 테이블에도 6개만 나열. tasks에서는 7개. 문서 간 불일치.",
-      "file": "docs/spec-kit/02_plan.md",
-      "fixed": true
-    },
-    {
-      "id": "ARCH-7",
-      "severity": "LOW",
-      "description": "단일 파일(plan) vs 다중 파일(tasks) 구조 상이. 구현 시점 결정 필요.",
-      "file": "docs/spec-kit/02_plan.md",
-      "fixed": false
     },
     {
       "id": "SEC-1",
       "severity": "HIGH",
-      "description": "PHI 파싱 후 보안 조치(로깅 금지, 메모리 안전 삭제) 명세 누락. console.error 로깅이 PHI 포함 위험.",
-      "file": "docs/spec-kit/01_spec.md",
+      "description": "handleParseError.js에서 typeof process !== 'undefined' 검사가 브라우저 환경에서 ReferenceError를 발생시킬 수 있음 (process 자체가 정의되지 않은 경우). try-catch로 방어 필요.",
+      "file": "viewer/src/data/dicomParser/handleParseError.js L27-29",
       "fixed": true
     },
     {
       "id": "SEC-2",
       "severity": "MEDIUM",
-      "description": "최대 파일 크기 512MB 제한이 파이프라인에 명시적으로 포함되지 않음. 크기 검증 단계 누락.",
-      "file": "docs/spec-kit/02_plan.md",
+      "description": "phiGuard.js dumpPhiValues 함수가 모든 원본 PHI 값을 평문으로 반환함. 배럴 파일(index.js)에서는 노출되지 않으나, 모듈 내부에서 여전히 직접 import 가능. 접근 제어 강화 권장.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js L71-73",
       "fixed": false
     },
     {
       "id": "SEC-3",
       "severity": "MEDIUM",
-      "description": "debugInfo에 내부 구조 정보 포함 가능. 최종 사용자 전달 시 정보 노출 위험.",
-      "file": "docs/spec-kit/01_spec.md",
-      "fixed": true
+      "description": "parseDICOM.js의 readFileAsArrayBuffer가 File 객체의 null 검증만 수행하고, 파일 타입/확장자 검증을 하지 않음. 악의적 파일 업로드 시 메모리 낭비 가능.",
+      "file": "viewer/src/data/dicomParser/parseDICOM.js L128-139",
+      "fixed": false
     },
     {
       "id": "PERF-1",
       "severity": "HIGH",
-      "description": "parsePixelData에서 전체 버퍼 재스캔 구조. 최대 512MB에서 O(n) 재스캔은 성능 저하 유발.",
-      "file": "docs/spec-kit/02_plan.md",
+      "description": "metadataParser.js에서 pixelDataOffset 캐시 계산이 VR 헤더 크기를 하드코딩(ctx.isExplicitVR ? 12 : 8)으로 계산. readTag 이후 ctx.offset이 이미 값 이후를 가리키므로 ctx.offset - result.length로 정확히 계산해야 함. Big Endian/Implicit VR에서 오프셋 오차 발생 가능.",
+      "file": "viewer/src/data/dicomParser/metadataParser.js L67-72",
       "fixed": true
     },
     {
       "id": "PERF-2",
-      "severity": "LOW",
-      "description": "최대 태그 수 10,000개 제한의 근거가 명시되지 않아 감사 시 근거 문서 요구 가능성.",
-      "file": "docs/spec-kit/02_plan.md",
-      "fixed": false
+      "severity": "MEDIUM",
+      "description": "tagReader.js readTagValue에서 OW/OB/UN 타입 값을 Uint8Array로 복사하여 반환. 대용량 픽셀 데이터의 경우 불필요한 메모리 복사 발생. 오프셋만 반환하고 지연 접근 권장.",
+      "file": "viewer/src/data/dicomParser/tagReader.js L78-82",
+      "fixed": true
     },
     {
       "id": "CQ-1",
-      "severity": "HIGH",
-      "description": "VR을 Volume Representation으로 오기 (ARCH-1과 동일).",
-      "file": "docs/spec-kit/01_spec.md",
+      "severity": "MEDIUM",
+      "description": "pixelDataParser.js findPixelDataTag가 항상 Little Endian으로만 탐색. Big Endian DICOM 파일에서는 태그를 찾지 못함. 폴백 경로이나 완전성을 위해 개선 필요.",
+      "file": "viewer/src/data/dicomParser/pixelDataParser.js L90-105",
       "fixed": true
     },
     {
       "id": "CQ-2",
-      "severity": "MEDIUM",
-      "description": "문서 간 용어 불일치: 복셀(픽셀) vs 픽셀(복셀).",
-      "file": "docs/spec-kit/",
+      "severity": "LOW",
+      "description": "pixelDataParser.js에 TODO 주석이 잔존함. JSDoc 단계로 명확화 필요.",
+      "file": "viewer/src/data/dicomParser/pixelDataParser.js L37",
       "fixed": true
     },
     {
       "id": "CQ-3",
       "severity": "MEDIUM",
-      "description": "HAZ 매핑 테이블 불완전. HAZ-1.1 완미에 기여하는 태스크 누락.",
-      "file": "docs/spec-kit/03_tasks.md",
+      "description": "constants.js MAGIC_BYTE_OFFSET과 PREAMBLE_LENGTH가 모두 128로 중복 정의. 의미는 같으나 유지보수 시 혼란 가능.",
+      "file": "viewer/src/data/dicomParser/constants.js L10-19",
       "fixed": false
     },
     {
       "id": "CQ-4",
       "severity": "LOW",
-      "description": "docs/summary.md 마지막 줄 newline 누락.",
-      "file": "docs/summary.md",
-      "fixed": true
-    },
-    {
-      "id": "CQ-6",
-      "severity": "LOW",
-      "description": "docs/progress/session_context.md 마지막 줄 newline 누락.",
-      "file": "docs/progress/session_context.md",
+      "description": "pixelDataParser에서 metadata.rows, metadata.columns가 0인 경우 expectedLength가 0이 되어 길이 불일치 경고가 발생하지 않음. 무효 메타데이터에 대한 방어 필요.",
+      "file": "viewer/src/data/dicomParser/pixelDataParser.js L60-65",
       "fixed": false
     }
   ]
