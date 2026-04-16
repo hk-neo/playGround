@@ -16,8 +16,15 @@ export {
   lookupVR,
 } from './dicomDictionary.js';
 
-// DICOMParser (FR-DP-001~006, FR-DP-008) -- 구현 예정
-// export { parseDICOM } from './DICOMParser.js';
+// DICOMParser (FR-DP-001~006, FR-DP-008)
+export {
+  parseDICOM,
+  validateMagicByte,
+  validateTransferSyntax,
+  parseMetadata,
+  parsePixelData,
+  handleParseError,
+} from './dicomParser/index.js';
 
 // DataValidator (FR-DP-007) -- 구현 예정
 // export {
