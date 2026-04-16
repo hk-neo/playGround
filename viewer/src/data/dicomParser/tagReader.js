@@ -157,9 +157,12 @@ export function readTagValue(ctx, vr, length) {
     case 'OW':
     case 'OB':
     case 'UN': {
-      const bytes = new Uint8Array(ctx.buffer, ctx.offset, length);
+      // 성능 최적화: 픽셀 데이터 등 대용량 바이너리는 복사하지 않고
+      // 오프셋만 전진. 호출부에서 ctx.offset 기반으로 직접 접근 가능.
+      const startOffset = ctx.offset;
       ctx.advance(length);
-      return bytes;
+      // 바이트 뷰 대신 오프셋 정보를 반환하여 지연 접근(lazy access) 지원
+      return { _binaryOffset: startOffset, _binaryLength: length };
     }
     case 'SQ': {
       // 시퀀스는 건너뛰기 (중첩 깊이 제한)

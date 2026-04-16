@@ -73,13 +73,10 @@ export function parseMetadata(buffer, preParsedMeta) {
       // 픽셀 데이터 그룹(0x7FE0) 도달 시 즉시 중단
       // PERF-3: 이 그룹 이후의 태그는 메타데이터가 아니므로 순회 불필요
       if (group >= PIXEL_DATA_GROUP) {
-        // 정확한 픽셀 데이터 태그인 경우 오프셋 캐시
-        if (tagKey === pixelTagKey) {
-          // result.offset = 태그 시작 위치
-          // 데이터 시작 위치 = 태그 시작 + 4(tag) + VR헤더(Explicit OW: 2VR+2reserved+4len=8)
-          const headerSize = ctx.isExplicitVR ? 12 : 8;
-          collected._pixelDataOffset = result.offset + headerSize;
-          collected._pixelDataLength = result.length;
+        // 정확한 픽셀 데이터 태그인 경우 바이너리 오프셋 캐시
+        if (tagKey === pixelTagKey && result.value && result.value._binaryOffset !== undefined) {
+          collected._pixelDataOffset = result.value._binaryOffset;
+          collected._pixelDataLength = result.value._binaryLength;
         }
         break;
       }

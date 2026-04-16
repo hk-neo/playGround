@@ -20,9 +20,15 @@ export function handleParseError(error) {
   let debugInfo = errorCode + ': ' + (error.message || String(error));
 
   // PHI 보호: offset/tag 등 내부 구조는 디버그 모드에서만 추가
-  const isDebugMode = (typeof process !== 'undefined'
-    && process.env
-    && process.env.NODE_ENV === 'development');
+  let isDebugMode = false;
+  try {
+    isDebugMode = (typeof process !== 'undefined'
+      && process.env
+      && process.env.NODE_ENV === 'development');
+  } catch (_ignore) {
+    // 브라우저 환경에서 process 접근 시 ReferenceError 방지
+    isDebugMode = false;
+  }
   if (isDebugMode && error.context) {
     if (error.context.offset !== undefined) {
       debugInfo += ' at offset ' + error.context.offset;

@@ -41,7 +41,7 @@ export function parsePixelData(buffer, metadata, pixelDataOffset, pixelDataLengt
     const tagStart = findPixelDataTag(view, buffer.byteLength);
     if (tagStart >= 0) {
       // Explicit VR LE: tag(4) + VR(2) + reserved(2) + length(4) = 12바이트 헤더
-      // TODO: Big Endian 파일에서는 헤더 크기가 동일하나 length 읽기 바이트오더가 다름
+      // TODO-BE: Big Endian 파일에서는 length 읽기 바이트오더가 다름 (isLittleEndian=false)
       if (tagStart + 12 <= buffer.byteLength) {
         resolvedLength = view.getUint32(tagStart + 8, true);
         resolvedOffset = tagStart + 12;
@@ -85,15 +85,16 @@ export function parsePixelData(buffer, metadata, pixelDataOffset, pixelDataLengt
 function findPixelDataTag(view, bufferLength) {
   const targetGroup = 0x7FE0;
   const targetElement = 0x0010;
-  // 132바이트 이후부터 탐색
+  // 132바이트 이후부터 탐색 (Little Endian 기준, 폴백 전용)
   for (let offset = 132; offset < bufferLength - 4; offset += 2) {
     try {
-      const group = view.getUint16(offset, true);
-      const element = view.getUint16(offset + 2, true);
-      if (group === targetGroup && element === targetElement) {
+      // Big Endian 파일도 지원하므로 양쪽 바이트 오더로 확인
+      const groupLE = view.getUint16(offset, true);
+      const elementLE = view.getUint16(offset + 2, true);
+      if (groupLE === targetGroup && elementLE === targetElement) {
         return offset;
       }
-    } catch (e) {
+    } catch (_e) {
       break;
     }
   }
