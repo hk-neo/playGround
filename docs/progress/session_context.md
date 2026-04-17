@@ -7,7 +7,7 @@
 - **Business Layer**: VolumeBuilder, MeasurementEngine, SecurityGuard
 - **Data Layer**: DICOMParser(COMP-1.1), DataValidator(COMP-1.2)
 - **Rendering Layer**: MPRRenderer, VolumeRenderer, ViewTransformEngine
-- **의존성 규칙**: 상위→하위 단방향. DIP 적용
+- **의존성 규칙**: 상위->하위 단방향. DIP 적용
 - **IEC 62304 Class A** 준수
 - **에러 클래스 계층**: BaseError -> DomainError / ApplicationError / InfrastructureError
 
@@ -50,15 +50,16 @@
 ### PLAYG-1376 [COMP-1.2] 데이터 검증기 (DataValidator)
 - **티켓**: PLAYG-1376 | parent: PLAYG-1386 (SDS-3.2) | issue_type: Architecture
 - **산출물**:
-  - 01_spec.md (16,195 bytes): 4개 US, 6개 REQ, 5개 NFR, IEC 62304 Class A
+  - 01_spec.md (23,827 bytes): 4개 US, 6개 REQ, 5개 NFR, IEC 62304 Class A
   - 02_plan.md (16,984 bytes): 7 Phase 구현 계획, TypeScript/Vitest
   - 03_tasks.md (21,736 bytes): 16개 태스크 (총 20시간 예상)
   - docs/summary.md (920 bytes)
 - **핵심 인터페이스**: validateHeader, validatePixelSpacing, validateVoxelRange, validateImageOrientation
 - **FR 추적**: FR-1.2, FR-1.4, FR-2.4, FR-4.2
 - **위험 완화**: HAZ-1.1 (영상 왜곡), HAZ-2.1 (측정 부정확)
-- **경로**: epic/story -> 전역 문서 영향 없음 -> Spec-Kit 3종만 생성
-- **Jira**: comment_id=11688 | **Git**: commit/push 예정
+- **경로**: epic/story -> 전역 문서 영향 없음 -> Spec-Kit 3종 유지
+- **Jira**: comment_id=11726 | **Git**: commit 3b20ede, push 완료
+- **재실행**: 2026-04-17 재확인 완료, 기존 산출물 유지 (command_args 없음)
 
 ## 3. 미완료 / Next Steps
 
@@ -69,7 +70,6 @@
 - [ ] Git commit 및 push
 
 ### PLAYG-1376 미완료
-- [ ] Git commit 및 push
 - [ ] 16개 태스크 실제 구현 착수 (Phase 1: 타입 정의부터)
 
 ### 일반
