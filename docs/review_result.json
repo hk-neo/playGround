@@ -1,0 +1,84 @@
+{
+  "status": "PASS",
+  "critical_count": 0,
+  "high_count": 0,
+  "issues": [
+    {
+      "id": "ARCH-1",
+      "severity": "MEDIUM",
+      "description": "metadataParser/maskPhiFields: maskPhiFields가 전달된 metadata 객체를 직접 변이(mutate)함. 함수형 원칙 위반. 호출부에서 원본 객체를 보존할 수 없음.",
+      "file": "viewer/src/data/dicomParser/metadataParser.js L128 / phiGuard.js",
+      "fixed": false
+    },
+    {
+      "id": "ARCH-2",
+      "severity": "MEDIUM",
+      "description": "parseDICOM.js 주석 '2. 파일 읽기' 단계 번호가 중복됨 (1번 이후 2번이 두 번 나옴). 코드 가독성 저하.",
+      "file": "viewer/src/data/dicomParser/parseDICOM.js L39, L43",
+      "fixed": true
+    },
+    {
+      "id": "SEC-1",
+      "severity": "HIGH",
+      "description": "handleParseError.js에서 typeof process !== 'undefined' 검사가 브라우저 환경에서 ReferenceError를 발생시킬 수 있음 (process 자체가 정의되지 않은 경우). try-catch로 방어 필요.",
+      "file": "viewer/src/data/dicomParser/handleParseError.js L27-29",
+      "fixed": true
+    },
+    {
+      "id": "SEC-2",
+      "severity": "MEDIUM",
+      "description": "phiGuard.js dumpPhiValues 함수가 모든 원본 PHI 값을 평문으로 반환함. 배럴 파일(index.js)에서는 노출되지 않으나, 모듈 내부에서 여전히 직접 import 가능. 접근 제어 강화 권장.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js L71-73",
+      "fixed": false
+    },
+    {
+      "id": "SEC-3",
+      "severity": "MEDIUM",
+      "description": "parseDICOM.js의 readFileAsArrayBuffer가 File 객체의 null 검증만 수행하고, 파일 타입/확장자 검증을 하지 않음. 악의적 파일 업로드 시 메모리 낭비 가능.",
+      "file": "viewer/src/data/dicomParser/parseDICOM.js L128-139",
+      "fixed": false
+    },
+    {
+      "id": "PERF-1",
+      "severity": "HIGH",
+      "description": "metadataParser.js에서 pixelDataOffset 캐시 계산이 VR 헤더 크기를 하드코딩(ctx.isExplicitVR ? 12 : 8)으로 계산. readTag 이후 ctx.offset이 이미 값 이후를 가리키므로 ctx.offset - result.length로 정확히 계산해야 함. Big Endian/Implicit VR에서 오프셋 오차 발생 가능.",
+      "file": "viewer/src/data/dicomParser/metadataParser.js L67-72",
+      "fixed": true
+    },
+    {
+      "id": "PERF-2",
+      "severity": "MEDIUM",
+      "description": "tagReader.js readTagValue에서 OW/OB/UN 타입 값을 Uint8Array로 복사하여 반환. 대용량 픽셀 데이터의 경우 불필요한 메모리 복사 발생. 오프셋만 반환하고 지연 접근 권장.",
+      "file": "viewer/src/data/dicomParser/tagReader.js L78-82",
+      "fixed": true
+    },
+    {
+      "id": "CQ-1",
+      "severity": "MEDIUM",
+      "description": "pixelDataParser.js findPixelDataTag가 항상 Little Endian으로만 탐색. Big Endian DICOM 파일에서는 태그를 찾지 못함. 폴백 경로이나 완전성을 위해 개선 필요.",
+      "file": "viewer/src/data/dicomParser/pixelDataParser.js L90-105",
+      "fixed": true
+    },
+    {
+      "id": "CQ-2",
+      "severity": "LOW",
+      "description": "pixelDataParser.js에 TODO 주석이 잔존함. JSDoc 단계로 명확화 필요.",
+      "file": "viewer/src/data/dicomParser/pixelDataParser.js L37",
+      "fixed": true
+    },
+    {
+      "id": "CQ-3",
+      "severity": "MEDIUM",
+      "description": "constants.js MAGIC_BYTE_OFFSET과 PREAMBLE_LENGTH가 모두 128로 중복 정의. 의미는 같으나 유지보수 시 혼란 가능.",
+      "file": "viewer/src/data/dicomParser/constants.js L10-19",
+      "fixed": false
+    },
+    {
+      "id": "CQ-4",
+      "severity": "LOW",
+      "description": "pixelDataParser에서 metadata.rows, metadata.columns가 0인 경우 expectedLength가 0이 되어 길이 불일치 경고가 발생하지 않음. 무효 메타데이터에 대한 방어 필요.",
+      "file": "viewer/src/data/dicomParser/pixelDataParser.js L60-65",
+      "fixed": false
+    }
+  ]
+}

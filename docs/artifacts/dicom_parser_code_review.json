@@ -1,0 +1,178 @@
+{
+  "architect": [
+    {
+      "id": "ARCH-1",
+      "severity": "HIGH",
+      "description": "metadataParser가 픽셀 데이터 오프셋(_pixelDataOffset, _pixelDataLength)을 DICOMMetadata 타입 객체에 내부 프로퍼티로 주입하고, pixelDataParser가 이를 읽어 사용한다. 메타데이터 타입에 파싱 내부 상태가 누출되어 계층 분리 원칙 위반. ParseContext 또는 별도 ParseState 객체에 오프셋을 캐리해야 함.",
+      "location": "metadataParser.js:92-93, pixelDataParser.js:28-30"
+    },
+    {
+      "id": "ARCH-2",
+      "severity": "HIGH",
+      "description": "pixelDataParser.parsePixelData가 ArrayBuffer 전체와 metadata를 받아 자체적으로 태그 재탐색(findPixelDataTag)을 수행한다. 이미 metadataParser에서 오프셋을 알아낸 정보가 없을 경우 바이트 스캔을 재실행하므로 책임 중복. 파싱 파이프라인(parseDICOM)에서 오프셋을 명시적으로 전달하는 구조로 개선 필요.",
+      "location": "pixelDataParser.js:24-51, findPixelDataTag 함수"
+    },
+    {
+      "id": "ARCH-3",
+      "severity": "MEDIUM",
+      "description": "constants.js에 ERROR_CODES(에러 코드), ERROR_MESSAGES(에러 메시지), METADATA_TAGS(태그 사전) 등 서로 다른 관심사의 상수가 단일 파일에 혼재. 단일 책임 원칙 위반으로 유지보수성 저하. errorCodes.js, metadataTags.js 등으로 분리 권장.",
+      "location": "constants.js 전체"
+    },
+    {
+      "id": "ARCH-4",
+      "severity": "MEDIUM",
+      "description": "DICOMMetadata 팩토리(createDICOMMetadata)가 types 레이어에 위치하지만, 실제로는 파싱 로직의 데이터 조립을 담당. patientName, patientID 등 민감 PHI 필드 기본값이 빈 문자열로 설정되어 있어 타입 정의와 데이터 초기화가 혼재됨.",
+      "location": "types/DICOMMetadata.js:46-74"
+    },
+    {
+      "id": "ARCH-5",
+      "severity": "MEDIUM",
+      "description": "index.js(배럴 파일)가 validateMagicByte, validateTransferSyntax, parseMetadata, parsePixelData, handleParseError 등 내부 구현 디테일을 모두 공개 API로 노출. 파서 모듈의 공개 인터페이스는 parseDICOM 하나로 충분하며, 나머지는 테스트를 위한 @internal export로 제한해야 결합도 감소.",
+      "location": "dicomParser/index.js, data/index.js"
+    },
+    {
+      "id": "ARCH-6",
+      "severity": "LOW",
+      "description": "하위 호환용 ErrorCodes, PARSE_ERR_MISSING_REQUIRED_TAG export가 constants.js에 존재. deprecated 마킹은 되어 있으나 제거 일정(timeline)이 명시되지 않아 기술 부채로 잔존.",
+      "location": "constants.js:65-73"
+    }
+  ],
+  "security": [
+    {
+      "id": "SEC-1",
+      "severity": "HIGH",
+      "description": "handleParseError에서 error.context의 offset, tag 값을 debugInfo 문자열에 직접 연결하여 반환. 최종 사용자에게 내부 파일 오프셋과 DICOM 태그 구조가 노출되어 공격자에게 파일 포맷 역공학 정보를 제공할 수 있음. debugInfo는 개발 모드에서만 노출하도록 분기 필요.",
+      "location": "handleParseError.js:22-27"
+    },
+    {
+      "id": "SEC-2",
+      "severity": "HIGH",
+      "description": "parseDICOM에서 '미지원 전송 구문: ' + transferSyntaxUID와 같이 사용자 입력(파일 내 UID)을 에러 메시지에 직접 삽입. 악의적 DICOM 파일에 의도적으로 긴 UID나 스크립트 삽입 문자열이 포함될 경우 로그/UI 주입(Injection) 가능성 존재. UID 길이 및 문자셋 검증 필요.",
+      "location": "parseDICOM.js:51"
+    },
+    {
+      "id": "SEC-3",
+      "severity": "HIGH",
+      "description": "DICOM 메타데이터에 patientName, patientID 등 민감 PHI(개인건강정보)가 포함되나, 파싱 과정에서 해당 데이터에 대한 접근 제어나 마스킹 메커니즘이 전혀 없음. DICOMMetadata 객체가 평문으로 메모리에 상주하며, console.log나 에러 보고 시 PHI 노출 위험.",
+      "location": "types/DICOMMetadata.js, metadataParser.js 전체"
+    },
+    {
+      "id": "SEC-4",
+      "severity": "MEDIUM",
+      "description": "ParseContext.readString가 null 바이트(\u0000)를 포함한 임의 바이트를 문자열로 변환. null byte injection을 통한 문자열 종단 조작 가능성. trim과 null 제거는 readTagValue의 default 케이스에서만 수행되므로 일관성 없음.",
+      "location": "ParseContext.js:66-72"
+    },
+    {
+      "id": "SEC-5",
+      "severity": "MEDIUM",
+      "description": "findPixelDataTag가 버퍼 전체를 2바이트 간격으로 선형 스캔. 악의적으로 대용량(최대 512MB) 파일 내에 가짜 7FE0,0010 태그를 위치시키면 잘못된 오프셋으로 대량의 데이터가 voxelData로 노출될 수 있음. 오프셋 탐색 시 메타그룹 이후 실제 데이터셋 범위 내로 제한 필요.",
+      "location": "pixelDataParser.js:89-103"
+    },
+    {
+      "id": "SEC-6",
+      "severity": "LOW",
+      "description": "MAX_FILE_SIZE(512MB)가 하드코딩 상수로 정의되어 있으나, parseDICOM 진입점에서 파일 크기 사전 검증을 수행하지 않음. readFileAsArrayBuffer 이후에야 pixelDataParser에서 검사하므로, 이미 512MB ArrayBuffer가 메모리에 로드된 후임.",
+      "location": "parseDICOM.js:18-21, pixelDataParser.js:20-22"
+    }
+  ],
+  "performance": [
+    {
+      "id": "PERF-1",
+      "severity": "CRITICAL",
+      "description": "ParseContext.readString가 문자열을 바이트 단위로 String.fromCharCode 반복 호출하여 생성. 대용량 DICOM 파일에서 수천~수만 바이트의 문자열 태그 값을 읽을 때 심각한 성능 저하. TextDecoder를 사용한 디코딩 또는 Uint8Array로 읽은 후 한 번에 String.fromCharCode.apply()로 변환 권장.",
+      "location": "ParseContext.js:66-72"
+    },
+    {
+      "id": "PERF-2",
+      "severity": "HIGH",
+      "description": "pixelDataParser.findPixelDataTag가 132바이트 이후 버퍼 전체를 2바이트 간격으로 선형 탐색(O(n)). 최악의 경우 512MB 파일에서 약 2.68억 회 반복. metadataParser에서 이미 픽셀 데이터 오프셋을 계산하므로 이 폴백 경로는 캐시 미스 시에만 사용되어야 함. 그러나 현재는 _pixelDataOffset이 없으면 무조건 전체 스캔 수행.",
+      "location": "pixelDataParser.js:89-103"
+    },
+    {
+      "id": "PERF-3",
+      "severity": "HIGH",
+      "description": "metadataParser에서 픽셀 데이터 태그를 발견할 때까지 최대 MAX_TAG_COUNT(10000)개의 태그를 순차 읽기. 각 태그마다 readTag 내에서 여러 번의 DataView 읽기 + 문자열 변환 발생. DICOM 파일 구조상 픽셀 데이터는 파일 끝에 위치하므로 대부분의 태그를 순회하게 됨. 태그 Skip 최적화(그룹 기반 점프) 필요.",
+      "location": "metadataParser.js:55-76"
+    },
+    {
+      "id": "PERF-4",
+      "severity": "MEDIUM",
+      "description": "readTagValue의 DS(Decimal String)와 IS(Integer String) 케이스에서 trim().replace(/\\0/g, '') 후 parseFloat/parseInt 호출. 정규식 리터럴이 매 호출마다 새 RegExp 객체로 생성됨. 사전 컴파일된 정규식 상수 사용 권장.",
+      "location": "tagReader.js:100-108"
+    },
+    {
+      "id": "PERF-5",
+      "severity": "MEDIUM",
+      "description": "skipUndefinedLengthSequence이 중첩 시퀀스 내에서 바이트 단위 태그 읽기를 반복 수행. 깊이 제한(MAX_SEQUENCE_DEPTH=10)은 있으나 실제로 skipSequence 함수에서만 체크되고, skipUndefinedLengthSequence 내부의 depth 변수는 별도로 관리됨. 버퍼 끝까지 스캔할 경우 최대 O(n) 시간 소요.",
+      "location": "tagReader.js:131-175"
+    },
+    {
+      "id": "PERF-6",
+      "severity": "LOW",
+      "description": "makeTagKey가 toString(16).toUpperCase().padStart(4,'0')로 태그 키를 매번 동적 생성. 메타데이터 파싱 루프 내에서 반복 호출되므로, 빈번히 사용되는 태그 키는 상수로 사전 정의하여 해시맵 조회 비용 절감 가능.",
+      "location": "dicomDictionary.js:113-117"
+    }
+  ],
+  "code_quality": [
+    {
+      "id": "CQ-1",
+      "severity": "HIGH",
+      "description": "pixelDataParser.parsePixelData의 반환 타입이 일관성 없음. 정상 시 { voxelData, warnings } 객체를 반환하나, JSDoc에는 @returns {ArrayBuffer}로 선언되어 있어 타입 불일치. 호출부(parseDICOM.js)에서는 pixelResult.voxelData로 접근하므로 런타임은 동작하나 문서화가 오해의 소지가 큼.",
+      "location": "pixelDataParser.js:15-16 (JSDoc) vs :58 (return)"
+    },
+    {
+      "id": "CQ-2",
+      "severity": "HIGH",
+      "description": "metadataParser에서 픽셀 데이터 태그 발견 시 collected._pixelDataOffset에 ctx.offset을 저장하지만, readTag 함수가 이미 offset을 length만큼 전진시킨 이후이므로 실제 픽셀 데이터 시작 오프셋이 아닌 값이 저장될 수 있음. readTag 반환값의 result.offset은 이미 VR+length 읽기 후의 오프셋. 정확한 픽셀 데이터 시작 위치 계산 필요.",
+      "location": "metadataParser.js:72-73"
+    },
+    {
+      "id": "CQ-3",
+      "severity": "HIGH",
+      "description": "readTag에서 길이가 남은 버퍼를 초과하는 경우(length > remaining) ctx.advance(ctx.remaining())으로 전진. 이후 readTag가 null을 반환하며 루프가 종료되지만, 실제로는 유효한 데이터의 일부가 누락되었음에도 별도 에러나 경고를 남기지 않아 침묵적 데이터 손실 발생.",
+      "location": "tagReader.js:70-72"
+    },
+    {
+      "id": "CQ-4",
+      "severity": "MEDIUM",
+      "description": "metadataParser에서 필수 태그 누락 시 errors 배열에 severity:'error'를 push. 그러나 선택 태그 누락 시에도 동일 errors 배열에 severity:'warning'을 push. 이 배열 이름이 'errors'인데 warning도 포함되어 혼란. parseResult.errors에는 metadataParser.errors와 pixelDataParser.warnings가 모두 병합됨. 명명이 parseMessages 또는 issues로 변경 필요.",
+      "location": "metadataParser.js:80-96, parseDICOM.js:97-107"
+    },
+    {
+      "id": "CQ-5",
+      "severity": "MEDIUM",
+      "description": "PREAMBLE_LENGTH(128)과 MAGIC_BYTE_OFFSET(128)이 동일한 값으로 중복 정의. 의미적으로 다른 개념(프리앰블 길이 vs 매직 바이트 오프셋)이지만 값이 같아 혼란 유발. 실수로 하나만 변경할 가능성 존재.",
+      "location": "constants.js:11-19"
+    },
+    {
+      "id": "CQ-6",
+      "severity": "MEDIUM",
+      "description": "DICOMMetadata 타입에 photometricInterpretation, samplesPerPixel 필드가 포함되어 있으나 JSDoc @typedef에 정의되지 않음. 또한 DICOMMetadata.js의 createDICOMMetadata 기본값에는 photometricInterpretation, samplesPerPixel이 없어 metadataParser에서 직접 설정해야 함. 타입 정의와 팩토리가 불일치.",
+      "location": "types/DICOMMetadata.js:46-74"
+    },
+    {
+      "id": "CQ-7",
+      "severity": "MEDIUM",
+      "description": "readTagValue에서 OW/OB/UN 케이스가 Uint8Array를 반환하나, OW(Other Word)는 원래 16비트 단위 데이터이므로 Uint16Array로 읽어야 정확함. 현재 구현은 바이트 단위로 읽어 엔디안 처리가 누락됨.",
+      "location": "tagReader.js:112-116"
+    },
+    {
+      "id": "CQ-8",
+      "severity": "LOW",
+      "description": "skipSequence 함수가 ctx를 사용하지 않고 depth만 증감. 실제로 시퀀스 건너뛰기 로직은 skipUndefinedLengthSequence가 담당하므로 skipSequence는 dead code에 가까움. 호출부가 존재하지 않음.",
+      "location": "tagReader.js:122-128"
+    },
+    {
+      "id": "CQ-9",
+      "severity": "LOW",
+      "description": "data/index.js에 DataValidator 관련 export가 주석으로 남아있어 dead code. '구현 예정' 주석이 있으나 실제 구현 여부가 불명확하고, 미구현 모듈의 export 명세가 공개 인터페이스에 노출됨.",
+      "location": "data/index.js:19-25"
+    },
+    {
+      "id": "CQ-10",
+      "severity": "LOW",
+      "description": "validateMagicByte와 validateTransferSyntax가 false를 반환하지만 호출부(parseDICOM)에서 이를 별도 에러로 래핑하여 처리. validate 함수가 예외를 던지는 것이 아니면 호출부가 항상 null-check + 에러 생성 코드를 중복 작성하게 됨. Result 패턴 또는 예외 기반 검증으로 일관성 확보 필요.",
+      "location": "validateMagicByte.js, validateTransferSyntax.js, parseDICOM.js:29-35, 49-56"
+    }
+  ]
+}
