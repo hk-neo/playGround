@@ -1,4 +1,4 @@
-# Tasks: DICOMParser 상세 설계 (SDS-3.1)
+# Tasks: DICOMParser 상세 설계
 
 **Input**: `docs/spec-kit/01_spec.md`, `docs/spec-kit/02_plan.md`
 **Ticket**: `PLAYG-1385` | **Date**: 2026-04-20
@@ -12,148 +12,474 @@
 ---
 
 ## Phase 1: Setup (공통 인프라)
+<!-- 모든 다음 단계에 필요한 공통 환경 설정 -->
 
-- [ ] **T001** 🔒 프로젝트 디렉토리 구조 생성 및 TypeScript 설정
-  - 파일: `src/data-layer/`, `tsconfig.json`, `vitest.config.ts`
-  - 완료 조건: `src/data-layer/` 디렉토리 존재, TypeScript 컴파일 및 Vitest 실행 가능
+- [ ] **T001** 🔒 DICOMParser 모듈 디렉토리 구조 생성 및 TypeScript 설정
+  - 파일: `src/data-layer/dicom-parser/`, `tests/unit/data-layer/dicom-parser/`, `tests/fixtures/`
+  - 내용:
+    - `src/data-layer/dicom-parser/` 디렉토리 생성
+    - `tests/unit/data-layer/dicom-parser/` 디렉토리 생성
+    - `tests/fixtures/` 디렉토리 생성
+    - `tsconfig.json`에 DICOMParser 경로 alias 매핑 추가 (필요시)
+    - `.gitkeep` 파일로 빈 디렉토리 구조 보존
+  - 완료 조건: 디렉토리 구조가 `02_plan.md` 섹션 4.1과 일치하고, TypeScript 컴파일 에러 없음
 
-- [ ] **T002** 🔒 타입 정의 및 상수 파일 작성
-  - 파일: `src/data-layer/types.ts`, `src/data-layer/constants.ts`
-  - 완료 조건: ParseResult, DICOMMetadata, ErrorMessage, DicomTag 인터페이스 정의 완료. DICOM 태그 사전(약 50개 필수 태그), 매직 바이트 오프셋(128), DICM 문자열 상수 정의 완료. TypeScript 컴파일 에러 없음
+- [ ] **T002** 🔒 핵심 타입 정의 (`types.ts`)
+  - 파일: `src/data-layer/dicom-parser/types.ts`
+  - 내용:
+    - `ParseResult` 인터페이스: `{ metadata: DICOMMetadata; voxelData: ArrayBuffer | null; errors: ErrorInfo[] }`
+    - `DICOMMetadata` 인터페이스: patientName, patientID, studyInstanceUID, seriesInstanceUID, studyDate, modality, rows, columns, bitsAllocated, bitsStored, pixelRepresentation, samplesPerPixel, numberOfFrames 필드 정의
+    - `ErrorInfo` 인터페이스: code(ErrorCode), message(string), tag(string | null), severity('error' | 'warning'), offset(number | null)
+    - `ErrorCode` 열거형: INVALID_FORMAT, TRUNCATED_DATA, INVALID_TAG_LENGTH, UNSUPPORTED_SYNTAX, MISSING_REQUIRED_TAG, INVALID_FILE_SIZE
+    - `DataElement` 인터페이스: tag(string), vr(string), length(number), value(ArrayBuffer), offset(number)
+    - `DICOMDataSet` 인터페이스: elements(Map<string, DataElement>), transferSyntax(string), isExplicitVR(boolean)
+    - `VRReader` 타입 alias: `(reader: ByteReader, length: number, vr: string) => unknown`
+  - 완료 조건: 모든 타입이 TypeScript 컴파일 에러 없이 정의되고, `02_plan.md` 섹션 4.2 데이터 모델과 일치함
+
+- [ ] **T003** 🔒 상수 및 에러 정의 (`constants.ts`, `errors.ts`)
+  - 파일: `src/data-layer/dicom-parser/constants.ts`, `src/data-layer/dicom-parser/errors.ts`
+  - 내용:
+    - `constants.ts`:
+      - DICOM_MAGIC_BYTE 상수: `[0x44, 0x49, 0x43, 0x4D]` ('DICM')
+      - DICOM_PREAMBLE_LENGTH: `128`
+      - DICOM_MAGIC_OFFSET: `128`
+      - DICOM_MIN_FILE_SIZE: `132`
+      - MAX_TAG_LENGTH: `67_108_864` (64MB, HAZ-5.2 완화)
+      - MAX_SEQUENCE_DEPTH: `16` (CX-4 복잡도 완화)
+      - 지원 전송 구문 UID 상수 (IMPLICIT_VR_LE, EXPLICIT_VR_LE, EXPLICIT_VR_BE)
+      - 파일 메타 정보 그룹 번호: `0x0002`
+      - 픽셀 데이터 태그: `(0x7FE0, 0x0010)`
+    - `errors.ts`:
+      - `DICOMErrorCodes` 객체: ErrorCode → 기본 메시지 매핑
+      - `createErrorInfo(code, overrides?)` 팩토리 함수
+      - `createWarningInfo(code, overrides?)` 팩토리 함수 (severity='warning')
+  - 완료 조건: 상수가 `01_spec.md` EC-001~EC-007 및 `02_plan.md` 섹션 2.4와 일치하고, 에러 팩토리가 정상 동작함
+
+- [ ] **T004** 🔒 ByteReader 유틸리티 클래스 구현 (`byte-reader.ts`)
+  - 파일: `src/data-layer/dicom-parser/byte-reader.ts`
+  - 내용:
+    - `ByteReader` 클래스:
+      - 생성자: `new ByteReader(buffer: ArrayBuffer)` → 내부 DataView 생성
+      - `offset` 속성: 현재 읽기 위치 (getter/setter)
+      - `byteLength` 속성: 전체 버퍼 길이
+      - `isLittleEndian` 속성: 엔디안 설정 (기본 true)
+      - `readUint8()`, `readUint16()`, `readUint32()`, `readInt16()`, `readInt32()`, `readFloat32()`, `readFloat64()`
+      - `readString(length)`: 지정 길이만큼 문자열 읽기
+      - `readBytes(length)`: 지정 길이만큼 ArrayBuffer 슬라이스 반환
+      - `canRead(bytes)`: 남은 바이트 수 확인
+      - `skip(bytes)`: 오프셋 이동
+      - `alignTo2()`: 2바이트 정렬 (오프셋이 홀수면 1 증가)
+    - 모든 읽기 메서드는 자동으로 offset을 증가시킴
+    - 경계 초과 시 RangeError 발생
+  - 완료 조건: 모든 읽기 메서드가 Little/Big Endian 모두 지원하고, 오프셋 자동 증가 확인, 경계 검사 동작 확인
+
+- [ ] **T005** 🔒 테스트 픽스처 생성 유틸리티 구현
+  - 파일: `tests/fixtures/generateTestDICOM.ts`
+  - 내용:
+    - `generateTestDICOM(options)` 함수:
+      - 매개변수: rows, columns, bitsAllocated, bitsStored, pixelRepresentation, samplesPerPixel, numberOfFrames, transferSyntax, patientName, patientID 등
+      - 128바이트 프리앰블 (0x00으로 채움)
+      - 'DICM' 매직 바이트
+      - 파일 메타 정보 (그룹 0002): 파일 메타 정보 버전, 전송 구문 UID, SOP Class UID 등
+      - 데이터셋: 환자/스터디/시리즈/이미지 속성 태그 + 픽셀 데이터
+    - `generateInvalidDICOM(type)` 함수:
+      - type: 'no-magic', 'truncated', 'invalid-tag-length', 'large-tag-value', 'duplicate-tags', 'no-pixel-data', 'unsupported-syntax'
+      - 각 EC 시나리오에 대응하는 고장 DICOM 데이터 생성
+  - 완료 조건: 생성된 ArrayBuffer가 ByteReader로 읽었을 때 프리앰블+매직바이트+메타정보 구조가 올바름, EC-001~EC-007 시나리오별 픽스처 생성 가능
+
+- [ ] **T006** 🔒 ByteReader 단위 테스트 작성
+  - 파일: `tests/unit/data-layer/dicom-parser/byte-reader.test.ts`
+  - 내용:
+    - Little Endian 읽기 테스트 (Uint8, Uint16, Uint32, Int16, Int32, Float32, Float64)
+    - Big Endian 읽기 테스트
+    - 오프셋 자동 증가 검증
+    - `readString()` UTF-8 디코딩 테스트
+    - `readBytes()` 슬라이스 반환 테스트
+    - `canRead()` 경계 확인 테스트
+    - `skip()` 및 `alignTo2()` 동작 테스트
+    - 버퍼 경계 초과 시 RangeError 발생 테스트
+  - 완료 조건: ByteReader 전체 메서드 커버리지 100%, 모든 테스트 PASS
 
 ---
 
 ## Phase 2: Foundational (선행 필수 항목)
+<!-- CRITICAL: 사용자 스토리 구현 전 반드시 완료해야 할 핵심 인프라 -->
 
-- [ ] **T003** 🔒 바이트 오더 유틸리티 및 태그 읽기 모듈 구현
-  - 파일: `src/data-layer/byteOrderUtils.ts`, `src/data-layer/tagReader.ts`
-  - 완료 조건: determineByteOrder() 함수가 메타헤더에서 리틀/빅 엔디안을 판별. readTag()가 그룹/엘리먼트 번호를 읽음. readValue()가 VR 타입에 따라 문자열/숫자/시퀀스 값을 읽음. 단위 테스트 통과
+- [ ] **T007** 🔒 DICOM 태그 레지스트리 구축 (`tag-registry.ts`)
+  - 파일: `src/data-layer/dicom-parser/tag-registry.ts`
+  - 내용:
+    - `DICOMTag` 인터페이스: tag(string, 'XXXX,XXXX'), name(string), vr(string)
+    - `TAG_REGISTRY: Map<string, DICOMTag>` — 필수 태그 매핑:
+      - 파일 메타 정보 (0002,xxxx): Media Storage SOP Class/Instance UID, Transfer Syntax UID, Implementation Version
+      - 환자 정보 (0010,xxxx): Patient Name, Patient ID
+      - 스터디 정보 (0020,xxxx): Study Instance UID, Series Instance UID, Study Date, Series Number
+      - 이미지 속성 (0028,xxxx): Rows, Columns, Bits Allocated, Bits Stored, High Bit, Pixel Representation, Samples Per Pixel
+      - 픽셀 데이터 (7FE0,0010): Pixel Data
+      - 프레임 정보 (0028,0008): Number of Frames
+      - 모달리티 (0008,0060): Modality
+    - `getTagInfo(tag: string): DICOMTag | undefined`
+    - `lookupVR(tag: string): string` — 태그로부터 VR 조회 (Implicit VR 모드에서 사용)
+    - Private Creator 태그(그룹 0009, 0011 등)는 'UN'(Unknown) VR로 처리
+  - 완료 조건: 01_spec.md FR-004 메타데이터 필드에 필요한 모든 태그가 등록되고, lookupVR()이 올바른 VR 반환
 
-- [ ] **T004** 🔒 DICOMParser 클래스 스켈레톤 및 handleParseError 구현
-  - 파일: `src/data-layer/DICOMParser.ts`
-  - 완료 조건: DICOMParser 클래스 생성자 및 프라이빗 필드(buffer, dataView, byteOffset, isLittleEndian) 정의. handleParseError() 메서드 구현 완료. 오류 분류 체계(fatal/warning/info) 동작 확인
+- [ ] **T008** 🔒 VR(Value Representation) 리더 구현 (`vr-readers.ts`)
+  - 파일: `src/data-layer/dicom-parser/vr-readers.ts`
+  - 내용:
+    - 전략 패턴 기반 `VRReaderRegistry: Map<string, VRReader>` 구성
+    - 27개 VR 타입별 읽기 함수 구현:
+      - 숫자형: US(Uint16), SS(Int16), UL(Uint32), SL(Int32), FL(Float32), FD(Float64)
+      - 문자열형: CS(16), LO(64), UI(64), DA(8), TM(16), DT(26), SH(16), PN(64), AE(16), AS(4), CS(16), DS(16+), IS(12+)
+      - 바이너리형: OB(바이트 배열), OW(워드 배열), UN(미확인), AT(태그 참조)
+      - 시퀀스형: SQ(시퀀스) — 기본 지원, 중첩 깊이 MAX_SEQUENCE_DEPTH(16) 제한
+    - `getVRReader(vr: string): VRReader` 함수
+    - 미확인 VR은 UN 리더로 fallback
+  - 완료 조건: 지원하는 27개 VR 각각이 올바른 타입의 값을 반환하고, 알 수 없는 VR은 UN으로 fallback 됨
+
+- [ ] **T009** 🔒 전송 구문 검증 로직 구현 (`transfer-syntax.ts`)
+  - 파일: `src/data-layer/dicom-parser/transfer-syntax.ts`
+  - 내용:
+    - `TransferSyntaxInfo` 인터페이스: uid(string), name(string), isExplicitVR(boolean), isLittleEndian(boolean), isSupported(boolean)
+    - `TRANSFER_SYNTAX_REGISTRY: Map<string, TransferSyntaxInfo>`:
+      - '1.2.840.10008.1.2' → Implicit VR, Little Endian, 지원 O
+      - '1.2.840.10008.1.2.1' → Explicit VR, Little Endian, 지원 O
+      - '1.2.840.10008.1.2.2' → Explicit VR, Big Endian, 지원 O
+      - 기타 → 지원 X
+    - `validateTransferSyntax(uid: string): { valid: boolean; info: TransferSyntaxInfo }`
+    - `getTransferSyntaxInfo(uid: string): TransferSyntaxInfo`
+    - UID가 빈 문자열이거나 누락된 경우 기본값(Implicit VR LE) 반환 + 경고 플래그
+  - 완료 조건: 지원하는 3개 전송 구문에 대해 valid=true, 미지원 구문에 대해 valid=false, EC-003(전송 구문 누락) 처리 확인
+---
+
+## Phase 3: User Story 1 — DICOM 파일 파싱 수행 (Priority: P1) 🎯 MVP
+<!-- US1 + US2: 매직 바이트 검증 + 기본 파싱 진입점 -->
+
+- **Goal**: 사용자가 DICOM 파일(File 또는 ArrayBuffer)을 입력하면 메타데이터와 복셀 데이터를 포함한 ParseResult를 반환한다.
+- **Independent Test**: 유효한 DICOM 파일을 `parseDICOM()`에 전달하고 ParseResult의 metadata, voxelData, errors 필드를 검증한다.
+
+- [ ] **T010** 🔀 [US1,US2] 매직 바이트 검증 함수 구현
+    - 파일: `src/data-layer/dicom-parser/DICOMParser.ts` (메서드로 구현)
+    - 내용:
+      - `validateMagicByte(data: ArrayBuffer): boolean`
+      - 데이터 길이 < DICOM_MIN_FILE_SIZE(132)인 경우 false 반환 (EC-001)
+      - offset 128 위치에서 4바이트를 읽어 [0x44, 0x49, 0x43, 0x4D]('DICM')와 비교
+      - 프리앰블(0~127)이 0x00이 아닌 경우 경고 발생 후 계속 진행 (EC-002)
+    - 완료 조건: 정상 DICM 시그니처에서 true, 비정상에서 false 반환. EC-001, EC-002 엣지 케이스 통과
+
+- [ ] **T011** 🔀 [US1,US2] 매직 바이트 및 전송 구문 검증 단위 테스트
+    - 파일: `tests/unit/data-layer/dicom-parser/validateMagicByte.test.ts`, `tests/unit/data-layer/dicom-parser/validateTransferSyntax.test.ts`
+    - 내용:
+      - validateMagicByte 테스트:
+        - 정상 'DICM' 시그니처 → true
+        - 잘못된 시그니처 → false
+        - 132바이트 미만 데이터 → false (EC-001)
+        - 프리앰블이 0x00이 아닌 경우 → true + 경고 (EC-002)
+      - validateTransferSyntax 테스트:
+        - Implicit VR LE UID → valid=true, isExplicitVR=false, isLittleEndian=true
+        - Explicit VR LE UID → valid=true, isExplicitVR=true, isLittleEndian=true
+        - Explicit VR BE UID → valid=true, isExplicitVR=true, isLittleEndian=false
+        - JPEG 압축 UID → valid=false
+        - 빈 문자열/누락 → 기본값 반환 + 경고 (EC-003)
+    - 완료 조건: 테스트 커버리지 100%, 모든 테스트 PASS
+
+- [ ] **T012** 🔒 [US1] 데이터 요소 순차 파싱 엔진 구현
+    - 파일: `src/data-layer/dicom-parser/DICOMParser.ts`
+    - 내용:
+      - `parseDataElements(reader: ByteReader, isExplicitVR: boolean, maxOffset: number): Map<string, DataElement>`
+      - 파일 메타 정보 구간(그룹 0002): 항상 Explicit VR LE로 파싱
+      - 데이터셋 구간(그룹 0004+): 전송 구문에 따른 VR 모드로 파싱
+      - Explicit VR 모드: 태그(4B) + VR(2B 문자열) + 길이(2B 또는 4B) + 값
+      - Implicit VR 모드: 태그(4B) + 길이(4B) + 값 (VR은 tag-registry에서 조회)
+      - 태그 길이 > MAX_TAG_LENGTH(64MB) 시 INVALID_TAG_LENGTH 에러 기록 후 건너뜀 (HAZ-5.2)
+      - 오프셋 미증가 감지 시 무한 루프 방지를 위해 파싱 중단
+      - 중복 태그 발견 시 마지막 값 사용 + 경고 기록 (EC-007)
+    - 완료 조건: Explicit/Implicit VR 모두에서 올바른 DataElement Map 생성, HAZ-5.2 태그 길이 검증 동작
+
+- [ ] **T013** 🔒 [US1] parseDICOM() 메인 진입점 구현
+    - 파일: `src/data-layer/dicom-parser/DICOMParser.ts`
+    - 내용:
+      - `parseDICOM(input: File | ArrayBuffer): Promise<ParseResult>`
+      - File 입력 시 FileReader.readAsArrayBuffer()로 변환
+      - ArrayBuffer 입력 시 직접 사용
+      - 전체 흐름 오케스트레이션:
+        1. ByteReader 생성
+        2. validateMagicByte() 호출 → 실패 시 에러 반환
+        3. 파일 메타 정보 파싱 (그룹 0002, 항상 Explicit VR LE)
+        4. 전송 구문 UID 추출 및 validateTransferSyntax() 호출
+        5. ByteReader 엔디안 설정 (전송 구문에 따름)
+        6. 데이터셋 파싱 (parseDataElements)
+        7. parseMetadata() 호출
+        8. parsePixelData() 호출
+        9. ParseResult 조합 및 반환
+      - 전체 흐름 try-catch 래핑 (HAZ-1.1)
+    - 완료 조건: File 및 ArrayBuffer 입력 모두에서 정상 ParseResult 반환, HAZ-1.1 예외 안전 보장
+
+- [ ] **T014** 🔀 [US1] DICOMParser 통합 단위 테스트
+    - 파일: `tests/unit/data-layer/dicom-parser/DICOMParser.test.ts`
+    - 내용:
+      - 정상 DICOM 파일(File 입력) 파싱 → ParseResult.errors 빈 배열, metadata 필수 필드 존재, voxelData 올바른 길이
+      - 정상 DICOM 데이터(ArrayBuffer 입력) 파싱 → File 입력과 동일 결과
+      - 매직 바이트 누락 파일 → INVALID_FORMAT 에러 포함
+      - 미지원 전송 구문 → UNSUPPORTED_SYNTAX 에러 포함
+      - 파일 메타 정보와 데이터셋 분리 처리 검증
+    - 완료 조건: US1 Acceptance Scenario 1, 2 모두 통과, 테스트 커버리지 90% 이상
 
 ---
 
-## Phase 3: User Story 1~2 — 매직 바이트 및 전송 구문 검증 (Priority: P1) 🎯 MVP
+## Phase 4: User Story 3 — 전송 구문 검증 (Priority: P1) 🎯 MVP
 
-- **Goal**: 비표준/손상 파일을 파싱 단계 이전에 사전 차단
-- **Independent Test**: 유효/무효 매직 바이트 및 압축/비압축 전송 구문에 대한 검증 결과 확인
+- **Goal**: DICOM 파일의 전송 구문 UID를 읽고, 현재 구현에서 지원하는 인코딩인지 검증한다.
+- **Independent Test**: 지원되는/지원되지 않는 Transfer Syntax UID가 포함된 DICOM 데이터로 `validateTransferSyntax()`를 테스트한다.
 
-- [ ] **T005** 🔀 [US2] validateMagicByte() 구현
-  - 파일: `src/data-layer/DICOMParser.ts`
-  - 완료 조건: 오프셋 128에서 DICM 문자열 확인. 빈 파일(0바이트) 및 128바이트 미만 파일에 대해 false 반환. 유효/무효 파일 각각에 대한 단위 테스트 통과 (EC-001, EC-002)
-
-- [ ] **T006** 🔀 [US2] validateTransferSyntax() 구현
-  - 파일: `src/data-layer/DICOMParser.ts`
-  - 완료 조건: Transfer Syntax UID(0002,0010) 파싱 및 지원 여부 판별. 비압축 전송 구문(Explicit VR Little Endian, Implicit VR Little Endian)만 허용. 압축 전송 구문(JPEG, JPEG2000, RLE) 거부. 단위 테스트 통과 (EC-005)
-
-- [ ] **T007** 🔒 [US2] 검증 메서드 단위 테스트 작성
-  - 파일: `src/__tests__/validateMagicByte.test.ts`, `src/__tests__/validateTransferSyntax.test.ts`
-  - 완료 조건: 테스트 커버리지 90% 이상, 엣지 케이스(EC-001, EC-002, EC-005) 포함, 전체 PASS
+- [ ] **T015** 🔀 [US3] 전송 구문 검증 통합 테스트
+    - 파일: `tests/unit/data-layer/dicom-parser/validateTransferSyntax.test.ts` (T011에서 작성된 파일에 추가)
+    - 내용:
+      - 3개 지원 전송 구문으로 생성된 테스트 DICOM 파일로 전체 파싱 → 성공
+      - 미지원 전송 구문(JPEG 계열)이 포함된 파일 → UNSUPPORTED_SYNTAX 에러 확인
+      - 전송 구문 UID가 비어있는 파일 → 기본값 처리 + 경고 (EC-003)
+    - 완료 조건: US3 Acceptance Scenario 1, 2 모두 통과
 
 ---
 
-## Phase 4: User Story 3 — 메타데이터 파싱 (Priority: P1)
+## Phase 5: User Story 4 — 메타데이터 추출 (Priority: P1) 🎯 MVP
 
-- **Goal**: DICOM 헤더에서 필수 메타데이터를 추출하여 DICOMMetadata 객체 반환
-- **Independent Test**: 알려진 태그 값을 가진 DICOM 파일의 파싱 결과 검증
+- **Goal**: DICOM 데이터셋에서 환자 정보, 스터디 정보, 시리즈 정보, 이미지 속성 등 핵심 메타데이터를 추출한다.
+- **Independent Test**: 알려진 태그 값을 가진 DICOM 파일을 파싱하고 추출된 메타데이터 값을 기댓값과 비교한다.
 
-- [ ] **T008** 🔀 [US3] parseMetadata() 구현
-  - 파일: `src/data-layer/DICOMParser.ts`
-  - 완료 조건: 필수 태그(PatientName, StudyDate, Modality, Rows, Columns, BitsAllocated, PixelSpacing, SliceThickness, ImageOrientationPatient, SamplesPerPixel, PhotometricInterpretation, TransferSyntaxUID) 파싱. 누락 태그는 기본값 설정 후 warnings에 추가. VR 타입별 파싱(LO, DA, CS, US, DS, DS, IS, OW) 동작. 단위 테스트 통과
+- [ ] **T016** 🔀 [US4] 메타데이터 파싱 함수 구현
+    - 파일: `src/data-layer/dicom-parser/DICOMParser.ts`
+    - 내용:
+      - `parseMetadata(elements: Map<string, DataElement>): DICOMMetadata`
+      - DataElement Map에서 필수 메타데이터 필드를 추출하여 DICOMMetadata 객체 생성:
+        - 환자 정보: Patient Name (0010,0010), Patient ID (0010,0020)
+        - 스터디 정보: Study Instance UID (0020,000D), Study Date (0008,0020)
+        - 시리즈 정보: Series Instance UID (0020,000E), Series Number (0020,0011)
+        - 모달리티: Modality (0008,0060)
+        - 이미지 속성: Rows (0028,0010), Columns (0028,0011), Bits Allocated (0028,0100), Bits Stored (0028,0101), High Bit (0028,0102), Pixel Representation (0028,0103), Samples Per Pixel (0028,0002), Number of Frames (0028,0008)
+      - 필수 태그 누락 시 warning 레벨 ErrorInfo 기록 (US4 시나리오 2)
+      - 누락된 선택 태그는 기본값(빈 문자열, 0 등)으로 설정
+    - 완료 조건: 모든 필수 태그가 올바르게 추출되고, 누락 태그에 대한 경고가 errors에 포함됨
 
-- [ ] **T009** 🔀 [US3] 바이트 오더 판별 및 적용 로직 구현
-  - 파일: `src/data-layer/DICOMParser.ts` 내 determineByteOrder() 프라이빗 메서드
-  - 완료 조건: 메타헤더(0002,0010) Transfer Syntax UID 기반 바이트 오더 자동 판별. 판별 불가 시 Little Endian 기본 적용 후 warnings에 추가 (EC-007). 단위 테스트 통과
+- [ ] **T017** 🔀 [US4] 메타데이터 파싱 단위 테스트
+    - 파일: `tests/unit/data-layer/dicom-parser/parseMetadata.test.ts`
+    - 내용:
+      - 전체 필수 태그가 포함된 DataElement Map → 모든 메타데이터 필드 올바르게 추출
+      - 필수 태그 누락 (예: Patient Name 없음) → warning 포함, 나머지 필드는 정상
+      - 빈 DataElement Map → 모든 필드 기본값, 다수의 warning
+      - VR 리더에서 반환된 값의 타입 변환 검증 (문자열 트림, 숫자 파싱 등)
+    - 완료 조건: US4 Acceptance Scenario 1, 2 모두 통과, parseMetadata 커버리지 95% 이상
+---
 
-- [ ] **T010** 🔒 [US3] 메타데이터 파싱 단위 테스트 작성
-  - 파일: `src/__tests__/parseMetadata.test.ts`
-  - 완료 조건: PixelSpacing, ImageOrientationPatient 등 핵심 태그 파싱 검증. 필수 태그 누락 시 경고 생성 검증. 바이트 오더 판별 검증. 테스트 커버리지 90% 이상, 전체 PASS
+## Phase 6: User Story 5 — 픽셀 데이터 파싱 (Priority: P1) 🎯 MVP
+
+- **Goal**: DICOM 파일에서 실제 영상 데이터(픽셀/복셀 데이터)를 추출하여 ArrayBuffer 형태로 반환한다.
+- **Independent Test**: 알려진 픽셀 값을 가진 테스트 DICOM 파일로 `parsePixelData()`를 호출하고 바이트 길이와 샘플 값을 검증한다.
+
+- [ ] **T018** 🔀 [US5] 픽셀 데이터 파싱 함수 구현
+    - 파일: `src/data-layer/dicom-parser/DICOMParser.ts`
+    - 내용:
+      - `parsePixelData(elements: Map<string, DataElement>, metadata: DICOMMetadata): ArrayBuffer | null`
+      - 태그 (7FE0,0010)에서 픽셀 데이터 추출
+      - Bits Allocated, Bits Stored, Pixel Representation 속성 반영:
+        - 8-bit 데이터: Uint8Array 처리
+        - 16-bit unsigned: Uint16Array 처리 (Pixel Representation = 0)
+        - 16-bit signed: Int16Array 처리 (Pixel Representation = 1)
+      - 멀티프레임 지원: NumberOfFrames 기반으로 전체 프레임 데이터 포함
+      - 픽셀 데이터 태그가 없는 경우 null 반환 (EC-004)
+      - ArrayBuffer.slice()로 원본 버퍼 슬라이스 반환 (메모리 복사 방지, NFR-002)
+    - 완료 조건: 512x512 16-bit 단일 프레임 → 524,288 바이트 반환, 멀티프레임 → 전체 프레임 포함, EC-004 처리 확인
+
+- [ ] **T019** 🔀 [US5] 픽셀 데이터 파싱 단위 테스트
+    - 파일: `tests/unit/data-layer/dicom-parser/parsePixelData.test.ts`
+    - 내용:
+      - 512x512 16-bit 단일 프레임 → 524,288 바이트 ArrayBuffer 검증 (US5 시나리오 1)
+      - 256x256 8-bit 단일 프레임 → 65,536 바이트 검증
+      - 멀티프레임 (3프레임) → 프레임 수 × 프레임 크기 검증 (US5 시나리오 2)
+      - 픽셀 데이터 태그 없음 → null 반환 (EC-004)
+      - Pixel Representation = 1 (signed) → Int16Array 해석 확인
+      - 메모리: 반환된 ArrayBuffer가 원본 버퍼의 슬라이스인지 확인
+    - 완료 조건: US5 Acceptance Scenario 1, 2 모두 통과, EC-004 처리 확인
 
 ---
 
-## Phase 5: User Story 4 — 픽셀 데이터 파싱 (Priority: P1)
+## Phase 7: User Story 6 — 파싱 에러 핸들링 (Priority: P2)
 
-- **Goal**: DICOM 픽셀 데이터 태그(7FE0,0010)에서 복셀 데이터 추출
-- **Independent Test**: 알려진 픽셀 값을 가진 파일의 voxelData 길이 및 샘플 값 검증
+- **Goal**: 파싱 과정에서 발생하는 모든 오류를 구조화된 에러 객체로 수집하고 반환한다.
+- **Independent Test**: 의도적으로 손상된 DICOM 파일을 파싱하고 errors 배열의 내용을 검증한다.
 
-- [ ] **T011** 🔀 [US4] parsePixelData() 및 skipToPixelData() 구현
-  - 파일: `src/data-layer/DICOMParser.ts`
-  - 완료 조건: 픽셀 데이터 태그(7FE0,0010) 탐색 및 오프셋 계산. BitsAllocated(8/16/32)에 따른 타입 매핑(Uint8Array, Int16Array/Uint16Array, Float32Array). 파일 크기가 예상 픽셀 데이터보다 작은 경우 오류 반환 (EC-006). Photometric Interpretation이 MONOCHROME1/2가 아닌 경우 경고 (EC-004). 단위 테스트 통과
+- [ ] **T020** 🔀 [US6] 에러 핸들링 함수 구현
+    - 파일: `src/data-layer/dicom-parser/DICOMParser.ts`
+    - 내용:
+      - `handleParseError(error: unknown, context: { tag?: string; offset?: number }): ErrorInfo`
+      - RangeError → TRUNCATED_DATA 에러 변환
+      - TypeError → INVALID_FORMAT 에러 변환
+      - 커스텀 에러 코드 기반 에러 → ErrorInfo 직접 변환
+      - 알 수 없는 에러 → INVALID_FORMAT 에러 + 원본 메시지 포함
+      - 파싱 루프 내 try-catch: 개별 태그 에러 격리, errors 배열에 누적 후 다음 태그로 계속 진행
+    - 완료 조건: 모든 에러 유형이 올바른 ErrorInfo로 변환되고, 파싱이 중단되지 않음
 
-- [ ] **T012** 🔒 [US4] 픽셀 데이터 파싱 단위 테스트 작성
-  - 파일: `src/__tests__/parsePixelData.test.ts`
-  - 완료 조건: 8-bit, 16-bit, 32-bit 각각에 대한 파싱 검증. 픽셀 데이터 태그 누락 시 오류 검증. 파일 크기 불일치 오류 검증. 테스트 커버리지 90% 이상, 전체 PASS (EC-003, EC-004, EC-006)
-
----
-
-## Phase 6: User Story 1 — 전체 파싱 통합 (Priority: P1)
-
-- **Goal**: parseDICOM() 메서드가 모든 하위 단계를 순차 실행하여 ParseResult 반환
-- **Independent Test**: 유효한 DICOM 파일의 전체 파싱 결과 검증
-
-- [ ] **T013** 🔒 [US1] parseDICOM() 통합 메서드 구현
-  - 파일: `src/data-layer/DICOMParser.ts`
-  - 완료 조건: FileReader로 File -> ArrayBuffer 변환. validateMagicByte -> validateTransferSyntax -> parseMetadata -> parsePixelData 순차 호출. 모든 오류 누적 후 ParseResult 반환. 타임아웃 메커니즘(30초) 적용. isValid 필드 자동 계산. 단위 테스트 통과
-
-- [ ] **T014** 🔒 [US1] 통합 테스트 및 엣지 케이스 검증
-  - 파일: `src/__tests__/DICOMParser.test.ts`, `src/__tests__/fixtures/`
-  - 완료 조건: 정상 파일(16-bit, 8-bit) 전체 파싱 검증. 손상 파일(EC-002) 부분 파싱 및 오류 검증. 빈 파일(EC-001) 즉시 거부 검증. 타임아웃 동작 검증. 전체 테스트 PASS
-
----
-
-## Phase 7: User Story 5 — 오류 처리 강화 (Priority: P2)
-
-- **Goal**: 파싱 오류 발생 시 구조화된 오류 메시지와 타임아웃 처리 보장
-- **Independent Test**: 다양한 오류 유형에 대한 handleParseError 및 타임아웃 동작 검증
-
-- [ ] **T015** 🔀 [US5] 오류 처리 강화 및 타임아웃 메커니즘 고도화
-  - 파일: `src/data-layer/DICOMParser.ts`
-  - 완료 조건: handleParseError 오류 분류 체계 검증. 타임아웃(30초) 메커니즘 동작 확인. 부분 파싱 결과(메타데이터만 유효) 지원. 단위 테스트 통과
-
-- [ ] **T016** 🔒 [US5] 오류 처리 단위 테스트 작성
-  - 파일: `src/__tests__/DICOMParser.test.ts` (오류 처리 섹션 추가)
-  - 완료 조건: 치명적/경고/정보 오류 분류 검증. 타임아웃 동작 검증. 바이트 오더 판별 불가 시 기본값 적용 검증. 전체 PASS
+- [ ] **T021** 🔀 [US6] 엣지 케이스 전용 테스트 작성
+    - 파일: `tests/unit/data-layer/dicom-parser/edge-cases.test.ts`, `tests/unit/data-layer/dicom-parser/handleParseError.test.ts`
+    - 내용:
+      - handleParseError 테스트:
+        - RangeError 입력 → TRUNCATED_DATA ErrorInfo
+        - TypeError 입력 → INVALID_FORMAT ErrorInfo
+        - 알 수 없는 에러 → INVALID_FORMAT + 원본 메시지
+      - 엣지 케이스 테스트:
+        - EC-001: 파일 크기 132바이트 미만 → INVALID_FILE_SIZE
+        - EC-002: 프리앰블 비정상 → 경고 + 파싱 계속
+        - EC-003: 전송 구문 누락 → 기본값 + 경고
+        - EC-004: 픽셀 데이터 없음 → metadata만 반환
+        - EC-005: 비정상 큰 태그 길이(4GB) → INVALID_TAG_LENGTH + 건너뜀
+        - EC-006: VR 혼재 → 전송 구문에 따라 올바르게 처리
+        - EC-007: 중복 태그 → 마지막 값 사용 + 경고
+      - 퍼즈 테스트: 랜덤 바이트 시퀀스 100회 입력 → 크래시 0건 (HAZ-1.1)
+    - 완료 조건: EC-001 ~ EC-007 전체 통과, 퍼즈 테스트 크래시 0건, handleParseError 커버리지 100%
 
 ---
 
-## Phase N: Integration & Finalization
+## Phase 8: User Story 7 — DataValidator 연동 검증 (Priority: P2)
 
-- [ ] **T-INT-01** 🔒 DataValidator 연동 검증 및 통합 테스트 실행
-  - 완료 조건: DataValidator.validateHeader(), validatePixelSpacing(), validateVoxelRange(), validateImageOrientation() 연동 확인. 모든 Acceptance Scenario PASS. SRS 추적성(FR-1.1~1.5, FR-7.2) 매핑 확인
+- **Goal**: 파싱된 데이터를 DataValidator 컴포넌트를 통해 추가 검증하여 의료 데이터의 무결성을 보장한다.
+- **Independent Test**: DataValidator mock을 사용하여 파싱 결과의 검증 경로(정상/비정상)를 테스트한다.
 
-- [ ] **T-INT-02** 🔒 코드 리뷰 및 문서 정리
-  - 완료 조건: 코드 리뷰 승인. HAZ-1.1, HAZ-5.2 위험 완화 조치 구현 확인. SDS 섹션 3.1과 구현 코드 일치성 확인
+- [ ] **T022** 🔀 [US7] DataValidator 인터페이스 및 연동 로직 구현
+    - 파일: `src/data-layer/data-validator/types.ts`, `src/data-layer/dicom-parser/DICOMParser.ts`
+    - 내용:
+      - `src/data-layer/data-validator/types.ts`:
+        - `ValidationResult` 타입: `{ isValid: boolean; errors: string[] }`
+        - `DataValidator` 인터페이스: `validate(parseResult: ParseResult): ValidationResult`
+      - `DICOMParser.ts` 연동:
+        - `setValidator(validator: DataValidator)` 메서드
+        - 파싱 완료 후 validator가 설정되어 있으면 validate() 호출
+        - 검증 결과의 에러를 ParseResult.errors에 추가
+    - 완료 조건: DataValidator 연동 후 검증 에러가 ParseResult.errors에 반영됨
+
+- [ ] **T023** 🔀 [US7] DataValidator 연동 단위 테스트
+    - 파일: `tests/unit/data-layer/dicom-parser/dataValidatorIntegration.test.ts`
+    - 내용:
+      - DataValidator mock 생성:
+        - 정상 검증 mock: 항상 `{ isValid: true, errors: [] }` 반환
+        - 비정상 검증 mock: `{ isValid: false, errors: ['PIXEL_VALUE_OUT_OF_RANGE'] }` 반환
+      - 테스트 케이스:
+        - validator 미설정 → 파싱 결과에 검증 에러 없음
+        - 정상 검증 → ParseResult.errors에 검증 에러 없음
+        - 비정상 검증 → ParseResult.errors에 'PIXEL_VALUE_OUT_OF_RANGE' 포함
+    - 완료 조건: US7 Acceptance Scenario 1, 2 모두 통과
+
+- [ ] **T024** 🔀 [US7] VR 리더 단위 테스트
+    - 파일: `tests/unit/data-layer/dicom-parser/vr-readers.test.ts`
+    - 내용:
+      - 숫자형 VR 테스트: US, SS, UL, SL, FL, FD — 각각 Little/Big Endian
+      - 문자열형 VR 테스트: CS, LO, UI, DA, TM, DT, SH, PN, AE, AS, DS, IS — 패딩 문자 제거 확인
+      - 바이너리형 VR 테스트: OB, OW, UN, AT
+      - 시퀀스형 VR 테스트: SQ — 기본 중첩 구조 파싱
+      - 알 수 없는 VR → UN fallback
+    - 완료 조건: 27개 VR 타입 각각에 대한 읽기 검증 완료, 커버리지 90% 이상
+---
+
+## Phase 9: Integration & Finalization
+
+- [ ] **T025** 🔒 공개 API 엑스포트 구성 (`index.ts`)
+    - 파일: `src/data-layer/dicom-parser/index.ts`
+    - 내용:
+      - `export { DICOMParser } from './DICOMParser'`
+      - `export type { ParseResult, DICOMMetadata, ErrorInfo, ErrorCode, DataElement, DICOMDataSet } from './types'`
+      - `export { DICOMErrorCodes } from './errors'`
+      - `export type { DataValidator, ValidationResult } from '../data-validator/types'`
+    - 완료 조건: 외부 모듈에서 `import { DICOMParser, ParseResult }` 등으로 임포트 가능, 트리쉐이킹 동작 확인
+
+- [ ] **T026** 🔒 성능 벤치마크 테스트 작성 및 실행
+    - 파일: `tests/unit/data-layer/dicom-parser/performance.test.ts`
+    - 내용:
+      - 512x512 16-bit 단일 프레임 DICOM 파일 파싱 시간 측정 (NFR-001: 100ms 이내)
+      - `performance.now()` 기반 정밀 측정
+      - 10회 평균/최대 시간 산출
+      - 메모리 사용량 간접 검증: 반환된 ArrayBuffer가 원본 슬라이스인지 확인 (NFR-002)
+    - 완료 조건: 512x512 16-bit 파싱 시간 100ms 이내, ArrayBuffer 복사 미발생 확인
+
+- [ ] **T027** 🔒 전체 테스트 스위트 실행 및 커버리지 검증
+    - 파일: `tests/unit/data-layer/dicom-parser/**/*.test.ts`
+    - 내용:
+      - `vitest run --coverage` 실행
+      - 커버리지 리포트 확인 (목표: 90% 이상)
+      - 실패 테스트 0건 확인
+      - 누락된 테스트 시나리오 보완
+    - 완료 조건: 전체 테스트 PASS, 라인 커버리지 90% 이상, 브랜치 커버리지 85% 이상
+
+- [ ] **T028** 🔒 최종 문서 정리 및 코드 리뷰 준비
+    - 파일: `docs/spec-kit/03_tasks.md`, `src/data-layer/dicom-parser/**/*.ts`
+    - 내용:
+      - JSDoc 주석 보완: 모든 공개 메서드/인터페이스에 설명 추가
+      - `README.md` 또는 모듈 설명 주석 작성 (사용법 예제 포함)
+      - `03_tasks.md` 완료 상태 업데이트
+      - Definition of Done 체크리스트 검증:
+        - FR-001 ~ FR-010 구현 완료
+        - 단위 테스트 커버리지 90% 이상
+        - EC-001 ~ EC-007 검증 완료
+        - DataValidator 연동 테스트 통과
+        - HAZ-1.1, HAZ-5.2 위험 완화 확인
+        - ADR-2 원칙 준수 확인
+    - 완료 조건: 모든 DoD 항목 충족, 코드 리뷰 요청 가능 상태
 
 ---
 
 ## Dependencies & Execution Order
 
 ```
-T001 → T002 → T003 → T004
-                         ↓
-              T005, T006 (🔀 병렬) → T007
-              T008, T009 (🔀 병렬) → T010
-              T011 (🔀 병렬)       → T012
+  T001 → T002 → T003 → T004 → T005 → T006
                                       ↓
-                              T013 → T014
+                          T007, T008, T009 (🔀 병렬 가능)
                                       ↓
-                              T015 → T016
+                    T010 ──── T011 (🔀 병렬, T010/T011 이후 T012 선행)
+                      ↘        ↙
+                       T012 → T013 → T014
+                                          ↓
+                    T015, T016, T018 (🔀 병렬 가능)
+                          ↓         ↓
+                    T017       T019 (각각 병렬)
                                       ↓
-                              T-INT-01 → T-INT-02
+                    T020, T021, T022, T024 (🔀 병렬 가능)
+                                      ↓
+                    T023
+                      ↓
+                    T025 → T026 → T027 → T028
 ```
+
+  ### 병렬 실행 가능 그룹
+
+| 그룹 | 태스크 | 조건
+|------|--------|------|
+| G1 | T007, T008, T009 | Phase 1 완료 후 병렬
+| G2 | T010, T011 | T007-T009 완료 후 병렬
+| G3 | T015, T016, T018 | T014 완료 후 병렬
+| G4 | T017, T019 | 각각 T016, T018 완료 후 개별
+| G5 | T020, T021, T022, T024 | Phase 6-7 완료 후 병렬
+
+---
 
 ## Estimated Effort
 
 | Phase        | 태스크 수 | 예상 소요 시간 |
-| ------------ | --------- | -------------- |
-| Setup        | 2         | 3시간          |
-| Foundational | 2         | 4시간          |
-| US2 (검증)   | 3         | 4시간          |
-| US3 (메타)   | 3         | 5시간          |
-| US4 (픽셀)   | 2         | 4시간          |
-| US1 (통합)   | 2         | 4시간          |
-| US5 (오류)   | 2         | 3시간          |
-| Integration  | 2         | 3시간          |
-| **합계**     | **18**    | **30시간**     |
+|-------------|----------|---------------|
+| Phase 1: Setup | 6 | 10시간 |
+| Phase 2: Foundational | 3 | 6시간 |
+| Phase 3: US1 (파싱 수행) | 5 | 8시간 |
+| Phase 4: US3 (전송 구문) | 1 | 2시간 |
+| Phase 5: US4 (메타데이터) | 2 | 4시간 |
+| Phase 6: US5 (픽셀 데이터) | 2 | 4시간 |
+| Phase 7: US6 (에러 핸들링) | 2 | 4시간 |
+| Phase 8: US7 (DataValidator) | 3 | 5시간 |
+| Phase 9: Integration | 4 | 6시간 |
+| **합계** | **28** | **49시간** |
+
+---
+
+## Risk Mitigation in Tasks
+
+| 위험 ID | 위험 | 관련 태스크 | 완화 조치 |
+|--------|------|-----------|----------|
+| HAZ-1.1 | 프로세스 크래시 | T013, T020, T021 | 전체 흐름 try-catch 래핑, 항상 ParseResult 반환 |
+| HAZ-5.2 | 악의적 파일 공격 | T003, T012, T021 | MAX_TAG_LENGTH 제한, 무한 루프 방지 가드 |
+| CX-4 | SQ 중첩 복잡도 | T008, T024 | MAX_SEQUENCE_DEPTH=16 제한, 재귀 깊이 검증 |
+| NFR-001 | 성능 100ms | T026 | 벤치마크 테스트로 검증 |
+| NFR-002 | 메모리 제한 | T018, T026 | ArrayBuffer.slice() 활용, 복사 방지 |
