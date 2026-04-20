@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: blob:; connect-src 'none';" />
+  <title>DentiView3D - CBCT Viewer</title>
+  <script type="module" crossorigin src="./bundle.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DRzgghii.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 헤더 -->
+    <header id="app-header">
+      <h1 class="app-title">DentiView3D</h1>
+      <span class="app-subtitle">CBCT Viewer (Local Only)</span>
+      <div class="header-actions">
+        <button id="btn-open-file" class="btn btn-primary">DICOM 파일 열기</button>
+        <button id="btn-open-folder" class="btn btn-secondary">폴더 열기</button>
+        <input type="file" id="file-input" accept=".dcm,.dicom,*" multiple hidden />
+        <input type="file" id="folder-input" webkitdirectory hidden />
+      </div>
+    </header>
+
+    <!-- 로딩/에러 영역 -->
+    <div id="status-bar" class="status-bar hidden">
+      <span id="status-text"></span>
+      <div id="progress-container" class="hidden">
+        <div id="progress-bar"></div>
+      </div>
+    </div>
+
+    <!-- 메인 콘텐츠 -->
+    <main id="main-content">
+      <!-- 환영 화면 -->
+      <div id="welcome-screen">
+        <div class="welcome-icon">🦷</div>
+        <h2>DentiView3D</h2>
+        <p>로컬 CBCT(DICOM) 영상 뷰어</p>
+        <p class="welcome-desc">로컬 파일만 읽어서 렌더링합니다. 네트워크 통신이나 서버 연결이 필요 없습니다.</p>
+        <div class="welcome-steps">
+          <div class="step">
+            <span class="step-num">1</span>
+            <span>DICOM 파일 또는 폴더를 선택하세요</span>
+          </div>
+          <div class="step">
+            <span class="step-num">2</span>
+            <span>자동으로 메타데이터와 영상이 로드됩니다</span>
+          </div>
+          <div class="step">
+            <span class="step-num">3</span>
+            <span>MPR 3단면(Axial/Coronal/Sagittal)을 확인합니다</span>
+          </div>
+        </div>
+        <p class="disclaimer">⚠️ 본 뷰어는 진단 목적이 아닌, 영상의 시각적 확인 및 품질 검토용 보조 도구입니다.</p>
+      </div>
+
+      <!-- 뷰어 영역 (초기 숨김) -->
+      <div id="viewer-container" class="hidden">
+        <!-- 메타데이터 패널 -->
+        <aside id="metadata-panel">
+          <h3>환자 정보</h3>
+          <div id="metadata-content" class="meta-grid">
+            <div class="meta-item">
+              <span class="meta-label">환자명</span>
+              <span id="meta-patient-name" class="meta-value">-</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">환자 ID</span>
+              <span id="meta-patient-id" class="meta-value">-</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">검사일</span>
+              <span id="meta-study-date" class="meta-value">-</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">모달리티</span>
+              <span id="meta-modality" class="meta-value">-</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">크기</span>
+              <span id="meta-size" class="meta-value">-</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">슬라이스</span>
+              <span id="meta-slices" class="meta-value">-</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Pixel Spacing</span>
+              <span id="meta-pixel-spacing" class="meta-value">-</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">전송구문</span>
+              <span id="meta-transfer-syntax" class="meta-value">-</span>
+            </div>
+          </div>
+          <h3>WL/WW 제어</h3>
+          <div class="wl-controls">
+            <label>Window Level: <span id="wl-value">40</span>
+              <input type="range" id="wl-slider" min="-1000" max="3000" value="40" />
+            </label>
+            <label>Window Width: <span id="ww-value">400</span>
+              <input type="range" id="ww-slider" min="1" max="4000" value="400" />
+            </label>
+          </div>
+        </aside>
+
+        <!-- MPR 뷰포트 -->
+        <div id="viewport-container">
+          <div class="viewport" id="viewport-axial">
+            <div class="viewport-header">
+              <span class="viewport-label">Axial</span>
+              <span class="slice-info">Slice: <span class="slice-num">0</span>/<span class="slice-total">0</span></span>
+            </div>
+            <canvas class="viewport-canvas" data-plane="axial"></canvas>
+            <input type="range" class="slice-slider" data-plane="axial" min="0" max="0" value="0" />
+          </div>
+          <div class="viewport" id="viewport-coronal">
+            <div class="viewport-header">
+              <span class="viewport-label">Coronal</span>
+              <span class="slice-info">Slice: <span class="slice-num">0</span>/<span class="slice-total">0</span></span>
+            </div>
+            <canvas class="viewport-canvas" data-plane="coronal"></canvas>
+            <input type="range" class="slice-slider" data-plane="coronal" min="0" max="0" value="0" />
+          </div>
+          <div class="viewport" id="viewport-sagittal">
+            <div class="viewport-header">
+              <span class="viewport-label">Sagittal</span>
+              <span class="slice-info">Slice: <span class="slice-num">0</span>/<span class="slice-total">0</span></span>
+            </div>
+            <canvas class="viewport-canvas" data-plane="sagittal"></canvas>
+            <input type="range" class="slice-slider" data-plane="sagittal" min="0" max="0" value="0" />
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 푸터 -->
+    <footer id="app-footer">
+      <p>DentiView3D v0.1.0 | 로컬 전용 - 네트워크 통신 없음 | 진단 목적 아님</p>
+    </footer>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,226 @@
+/**
+ * @file DentiView3D 메인 스타일시트
+ * @description 로컬 전용 CBCT 영상 뷰어 UI 스타일
+ */
+
+/* CSS 변수 */
+:root {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-panel: #0f3460;
+  --bg-viewport: #000000;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0b0;
+  --text-accent: #4fc3f7;
+  --accent: #2196f3;
+  --accent-hover: #1976d2;
+  --danger: #f44336;
+  --warning: #ff9800;
+  --success: #4caf50;
+  --border: #2a2a4a;
+  --shadow: rgba(0, 0, 0, 0.3);
+  --radius: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* 헤더 */
+#app-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.app-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-accent);
+  letter-spacing: -0.5px;
+}
+
+.app-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.header-actions { margin-left: auto; display: flex; gap: 8px; }
+
+/* 버튼 */
+.btn {
+  padding: 8px 18px;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-secondary { background: var(--bg-panel); color: var(--text-primary); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--border); }
+
+/* 상태 바 */
+.status-bar {
+  padding: 8px 24px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-bar.error { background: rgba(244, 67, 54, 0.15); color: var(--danger); }
+.status-bar.success { background: rgba(76, 175, 80, 0.1); color: var(--success); }
+.status-bar.loading { background: rgba(33, 150, 243, 0.1); color: var(--accent); }
+
+#progress-container { flex: 1; max-width: 300px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+#progress-bar { height: 100%; background: var(--accent); border-radius: 3px; width: 0%; transition: width 0.3s; }
+
+/* 메인 */
+#main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* 환영 화면 */
+#welcome-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+  padding: 40px;
+}
+
+.welcome-icon { font-size: 4rem; margin-bottom: 16px; }
+#welcome-screen h2 { font-size: 2rem; color: var(--text-accent); margin-bottom: 8px; }
+#welcome-screen p { color: var(--text-secondary); margin-bottom: 4px; }
+.welcome-desc { font-size: 0.9rem; max-width: 500px; margin-bottom: 32px !important; }
+
+.welcome-steps { display: flex; gap: 24px; margin-bottom: 40px; flex-wrap: wrap; justify-content: center; }
+.step { display: flex; align-items: center; gap: 10px; background: var(--bg-secondary); padding: 12px 20px; border-radius: var(--radius); }
+.step-num {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--accent); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.85rem; flex-shrink: 0;
+}
+
+.disclaimer {
+  font-size: 0.8rem;
+  color: var(--warning) !important;
+  background: rgba(255, 152, 0, 0.08);
+  padding: 10px 20px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 152, 0, 0.2);
+}
+
+/* 뷰어 컨테이너 */
+#viewer-container { display: flex; flex: 1; overflow: hidden; }
+
+/* 메타데이터 패널 */
+#metadata-panel {
+  width: 260px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  padding: 16px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+#metadata-panel h3 {
+  font-size: 0.85rem;
+  color: var(--text-accent);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.meta-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.meta-item { display: flex; flex-direction: column; gap: 2px; }
+.meta-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; }
+.meta-value { font-size: 0.85rem; font-family: var(--font-mono); word-break: break-all; }
+
+/* WL/WW */
+.wl-controls { display: flex; flex-direction: column; gap: 12px; }
+.wl-controls label { font-size: 0.8rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 4px; }
+.wl-controls input[type="range"] { width: 100%; cursor: pointer; }
+
+/* 뷰포트 */
+#viewport-container {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 2px;
+  padding: 2px;
+  background: var(--border);
+}
+
+.viewport {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-viewport);
+  position: relative;
+}
+
+.viewport-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 10px;
+  background: rgba(15, 52, 96, 0.6);
+  font-size: 0.75rem;
+}
+
+.viewport-label { font-weight: 700; color: var(--text-accent); text-transform: uppercase; }
+.slice-info { color: var(--text-secondary); }
+
+.viewport-canvas { flex: 1; width: 100%; display: block; background: black; cursor: crosshair; }
+
+.slice-slider {
+  width: 100%;
+  height: 16px;
+  cursor: pointer;
+  background: var(--bg-secondary);
+  border: none;
+}
+
+/* 푸터 */
+#app-footer {
+  padding: 6px 24px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* 유틸리티 */
+.hidden { display: none !important; }
+
+/* 반응형 */
+@media (max-width: 1024px) {
+  #viewer-container { flex-direction: column; }
+  #metadata-panel { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 200px; }
+  #viewport-container { grid-template-columns: 1fr; grid-template-rows: repeat(3, 1fr); }
+}
