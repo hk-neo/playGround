@@ -2,7 +2,7 @@
 
 ## 현재 티켓
 - **Key**: PLAYG-1460
-- **Summary**: [SRS]
+- **Summary**: [SRS] DentiView3D 소프트웨어 요구사항 명세서
 - **Type**: Document
 
 ## 연결된 티켓 요약
