@@ -1,0 +1,182 @@
+[
+  {
+    "parent_keys": [
+      "PLAYG-1461"
+    ],
+    "summary": "[ADR-1] Layered Architecture 채택",
+    "requirement_type": "Interface",
+    "description": "문제 상황: 시스템 복잡도 관리와 IEC 62304 Class A 모듈 분리 요구\n대안 검토: Microservices(서버 불필요로 기각), Event-Driven(이벤트 소스 단일로 과설계), Pipe-Filter(조건부 분기 다수로 부적합)\n최종 선택: 4계층 Layered Architecture (Presentation, Application, Domain, Infrastructure)\n근거: SRS 소스코드 모듈 분리와 자연스러운 매핑, 단방향 의존성 보장, Class A 추적성 요구 충족\n영향 범위: 전체 시스템 컴포넌트 구조",
+    "verification_criteria": "아키텍처 검토: 설계 검토 회의에서 계층 분리 및 의존성 방향 승인",
+    "trace_requirements": [
+      "FR-5.5",
+      "NFR-5.1",
+      "NFR-5.2"
+    ]
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1461"
+    ],
+    "summary": "[ADR-2] Canvas 2D 렌더링 선택",
+    "requirement_type": "Interface",
+    "description": "문제 상황: MPR 영상 렌더링을 위한 그래픽스 기술 선택\n대안 검토: WebGL(과도한 복잡도, 3D 불필요), SVG(대용량 복셀 데이터에 부적합)\n최종 선택: HTML5 Canvas 2D API\n근거: SRS IF-2.2 명시, 2D 슬라이스 렌더링에 충분한 성능(NFR-1.2: 100ms 이내), 외부 라이브러리 불필요\n영향 범위: Renderer 컴포넌트",
+    "verification_criteria": "아키텍처 검토: 성능 목표(NFR-1.2, NFR-1.3) 달성 가능성 확인",
+    "trace_requirements": [
+      "FR-2.2",
+      "FR-2.3",
+      "NFR-1.2",
+      "NFR-1.3"
+    ]
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1461"
+    ],
+    "summary": "[ADR-3] WeakMap 기반 PHI 보호",
+    "requirement_type": "Interface",
+    "description": "문제 상황: 환자 식별 정보의 안전한 메모리 관리 및 외부 접근 차단\n대안 검토: closure 기반 캡슐화(참조 유지로 메모리 누수 위험), Symbol 속성(완전 은폐 어려움)\n최종 선택: WeakMap<Metadata, Map<string, string>> 구조\n근거: FR-3.1 마스킹, FR-3.2 접근 제어, FR-3.3 GC 연동 자동 해제, 정보 은폐 원칙 준수\n영향 범위: PHI Guard 컴포넌트, DICOM Parser 메타데이터 출력",
+    "verification_criteria": "아키텍처 검토: PHI 접근 경로 차단 및 GC 동작 검증 설계 승인",
+    "trace_requirements": [
+      "FR-3.1",
+      "FR-3.2",
+      "FR-3.3",
+      "NFR-2.2"
+    ]
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1461"
+    ],
+    "summary": "[ADR-4] 사전 검증 파이프라인",
+    "requirement_type": "Interface",
+    "description": "문제 상황: 악의적/손상된 DICOM 파일로부터 시스템 보호\n대안 검토: 파싱 중 검증(오류 복구 복잡), 사후 검증(불필요한 메모리 로딩)\n최종 선택: 파일 크기 -> 매직 바이트 -> 전송 구문 -> 필수 태그 순차 사전 검증\n근거: NFR-3.2(입력 검증 완전성), RMR HAZ-1군 위험 완화, 메모리 로딩 전 조기 실패\n영향 범위: DICOM Parser 컴포넌트 전체 검증 흐름",
+    "verification_criteria": "아키텍처 검토: 검증 단계 완전성 및 HAZ-1군 위험 완화 적절성 확인",
+    "trace_requirements": [
+      "FR-1.1",
+      "FR-1.2",
+      "FR-1.3",
+      "FR-1.4",
+      "FR-1.5",
+      "FR-1.6",
+      "NFR-3.2"
+    ]
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1461"
+    ],
+    "summary": "[ADR-5] 오프라인 전용 아키텍처",
+    "requirement_type": "Interface",
+    "description": "문제 상황: 의료 영상 데이터 네트워크 전송으로 인한 정보 유출 위험\n대안 검토: 서버 기반 처리(보안 위험 증가), 하이브리드(복잡도 증가)\n최종 선택: 완전 오프라인, 네트워크 통신 없는 순수 클라이언트 아키텍처\n근거: NFR-2.1(오프라인 전용), RMR HAZ-3군(PHI 유출 방지), 제품 정의 부합\n영향 범위: 전체 시스템 (배포, 보안, 데이터 흐름)",
+    "verification_criteria": "아키텍처 검토: 네트워크 통신 경로 부재 확인 및 PHI 유출 경로 차단 검증",
+    "trace_requirements": [
+      "NFR-2.1",
+      "FR-3.1",
+      "FR-3.2",
+      "FR-3.3"
+    ]
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1461"
+    ],
+    "summary": "[COMP-1.1] DICOM Parser 컴포넌트",
+    "requirement_type": "Functional",
+    "description": "DICOM 파일을 파싱하여 메타데이터와 픽셀 데이터를 추출하는 Domain Layer 컴포넌트\n\n- 공개 인터페이스: parseDICOM(file: File): ParseResult\n- 하위 모듈: validateMagicByte, validateTransferSyntax, metaGroupParser, metadataParser, pixelDataParser, tagReader, ParseContext\n- 의존성: Constants(MAX_FILE_SIZE, MAX_TAG_COUNT, MAX_SEQUENCE_DEPTH), Types(ParseResult), PHI Guard\n- 내부 흐름: 파일 크기 검증 -> 매직 바이트 검증 -> 전송 구문 검증 -> 메타 그룹 파싱 -> 메타데이터 파싱 -> PHI 마스킹 -> 픽셀 데이터 추출\n- FR 추적: FR-1.1~FR-1.8, FR-5.1~FR-5.5\n- 관련 ADR: ADR-1(Layered Architecture), ADR-4(사전 검증 파이프라인)",
+    "verification_criteria": "단위 테스트: 정상/비정상 DICOM 파일 파싱, 각 검증 단계별 true/false 반환 확인, Class A 기준 statement coverage",
+    "trace_requirements": [
+      "FR-1.1",
+      "FR-1.2",
+      "FR-1.3",
+      "FR-1.4",
+      "FR-1.5",
+      "FR-1.6",
+      "FR-1.7",
+      "FR-1.8",
+      "FR-5.1",
+      "FR-5.2",
+      "FR-5.3",
+      "FR-5.4",
+      "FR-5.5"
+    ]
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1461"
+    ],
+    "summary": "[COMP-1.2] PHI Guard 컴포넌트",
+    "requirement_type": "Functional",
+    "description": "환자 식별 정보(PHI)를 마스킹하고 원본 접근을 제어하는 Domain Layer 컴포넌트\n\n- 공개 인터페이스: maskPhiFields(metadata: Metadata): MaskedMetadata, getPhiValue(metadata, key): string\n- 비노출: dumpPhiValues()는 index.js 배럴 파일에서 export하지 않음\n- 내부 저장소: WeakMap<Metadata, Map<string, string>>\n- 의존성: Constants(PHI 필드 정의)\n- FR 추적: FR-3.1, FR-3.2, FR-3.3\n- 관련 ADR: ADR-3(WeakMap 기반 PHI 보호)",
+    "verification_criteria": "단위 테스트: 마스킹 동작 확인, WeakMap 접근 제어 확인, GC 연동 테스트, Class A 기준 statement coverage",
+    "trace_requirements": [
+      "FR-3.1",
+      "FR-3.2",
+      "FR-3.3",
+      "NFR-2.2"
+    ]
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1461"
+    ],
+    "summary": "[COMP-1.3] Volume Processor 컴포넌트",
+    "requirement_type": "Functional",
+    "description": "파싱된 복셀 데이터를 3차원 볼륨으로 구성하고 WL/WW 정규화를 수행하는 Domain Layer 컴포넌트\n\n- 공개 인터페이스: buildVolumeData(parseResult: ParseResult): VolumeData\n- 내부 기능: 복셀 TypedArray 변환(Uint8/Int16/Uint16/Float32), 볼륨 데이터(w,h,d) 구성, 초기 슬라이스 위치 설정\n- 의존성: Types(VolumeData, VoxelData)\n- FR 추적: FR-2.1, FR-2.5, FR-2.6\n- 관련 ADR: ADR-1(Layered Architecture)",
+    "verification_criteria": "단위 테스트: 8/16비트 변환, 비표준 비트 깊이 폴백, 볼륨 구성 정확성, Class A 기준 statement coverage",
+    "trace_requirements": [
+      "FR-2.1",
+      "FR-2.5",
+      "FR-2.6",
+      "NFR-1.1"
+    ]
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1461"
+    ],
+    "summary": "[COMP-1.4] Renderer 컴포넌트",
+    "requirement_type": "Functional",
+    "description": "3단면 MPR 영상을 Canvas 2D API로 렌더링하는 Application Layer 컴포넌트\n\n- 공개 인터페이스: renderViewport(canvas, sliceData, wl, ww): void\n- 내부 기능: WL/WW 정규화(Math.max(1,ww)), 0~255 클램핑, ImageData 생성, Canvas putImageData\n- 의존성: VolumeData, Canvas 2D API\n- FR 추적: FR-2.2, FR-2.3\n- 관련 ADR: ADR-2(Canvas 2D 렌더링)",
+    "verification_criteria": "단위 테스트: WL/WW 정규화 정확성, 클램핑 동작, Canvas 출력 확인, 성능 목표(NFR-1.2, NFR-1.3) 측정",
+    "trace_requirements": [
+      "FR-2.2",
+      "FR-2.3",
+      "NFR-1.2",
+      "NFR-1.3"
+    ]
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1461"
+    ],
+    "summary": "[COMP-1.5] UI Controller 컴포넌트",
+    "requirement_type": "Functional",
+    "description": "사용자 입력 처리, 화면 전환, 상태 관리를 담당하는 Presentation Layer 컴포넌트\n\n- 공개 인터페이스: handleFileSelect(event), bindEvents(), showStatus(msg), showViewer(), updateMetadataPanel()\n- 내부 기능: 파일 선택 처리, 슬라이더 이벤트 바인딩, 마우스 휠 이벤트 처리, 슬라이스 인덱스 범위 보정(Math.max/min), 웰컴/뷰어 화면 전환\n- 의존성: DICOM Parser, Volume Processor, Renderer, DOM API\n- FR 추적: FR-2.4, FR-4.1~FR-4.6\n- 관련 ADR: ADR-1(Layered Architecture)",
+    "verification_criteria": "단위 테스트: 이벤트 핸들링, 화면 전환, 슬라이스 범위 보정, 상태 표시 동작 확인",
+    "trace_requirements": [
+      "FR-2.4",
+      "FR-4.1",
+      "FR-4.2",
+      "FR-4.3",
+      "FR-4.4",
+      "FR-4.5",
+      "FR-4.6"
+    ]
+  },
+  {
+    "parent_keys": [
+      "PLAYG-1461"
+    ],
+    "summary": "[COMP-1.6] Constants & Types 모듈",
+    "requirement_type": "Functional",
+    "description": "시스템 전체 상수 정의 및 표준 타입 정의를 제공하는 Infrastructure Layer 컴포넌트\n\n- 상수: MAX_FILE_SIZE(512MB), MAX_TAG_COUNT(10000), MAX_SEQUENCE_DEPTH(10), METADATA_TAGS, ERROR_MESSAGES, SUPPORTED_TRANSFER_SYNTAXES\n- 타입: ParseResult(metadata, voxelData, errors, isValid), VolumeData(voxelData, dimensions, wl, ww)\n- 의존성: 없음 (최하위 계층)\n- FR 추적: FR-1.4(MAX_FILE_SIZE), FR-1.3(METADATA_TAGS), FR-1.2(TRANSFER_SYNTAXES), FR-5.1(MAX_TAG_COUNT), FR-5.2(MAX_SEQUENCE_DEPTH), FR-5.5(ParseResult)\n- 관련 ADR: ADR-1(Layered Architecture)",
+    "verification_criteria": "단위 테스트: 상수 값 불변성, 타입 구조 일관성, 범위 값 적절성 확인",
+    "trace_requirements": [
+      "FR-1.3",
+      "FR-1.4",
+      "FR-5.1",
+      "FR-5.2",
+      "FR-5.5"
+    ]
+  }
+]
