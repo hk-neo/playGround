@@ -240,3 +240,274 @@ note over UI: 에러 후에도 애플리케이션 정상 동작 유지 (NFR-7)
 
 @enduml
 {code}
+---
+
+*[SAD-04] 배포 뷰 (Deployment View)*
+
+*물리적 배포 구성*
+
+DentiView3D는 순수 클라이언트 사이드 웹 애플리케이션으로, 별도의 서버 인프라가 필요 없다.
+정적 파일(HTML, CSS, JavaScript)이 웹 서버 또는 로컬 파일 시스템에서 직접 로드되어 브라우저에서 실행된다.
+
+*배포 아키텍처 다이어그램*
+
+{code}
+@startuml SAD_DeploymentView
+skinparam backgroundColor white
+skinparam nodeStyle rectangle
+
+node "사용자 워크스테이션" as WS {
+  node "웹 브라우저" as WB {
+    artifact "DentiView3D" as DV {
+      component [UiController]
+      component [MprRenderer]
+      component [DicomParser]
+      component [ValidationModule]
+      component [MetadataParser]
+      component [PhiGuard]
+      component [ErrorManager]
+    }
+    database "브라우저 메모리" as MEM {
+      [ArrayBuffer]
+      [WeakMap]
+    }
+  }
+  folder "로컬 파일 시스템" as FS {
+    artifact "DICOM 파일" as DF
+  }
+}
+
+node "배포 서버 (정적 호스팅)" as SERVER {
+  folder "정적 파일" as STATIC {
+    artifact "index.html" as HTML
+    artifact "app.js" as JS
+    artifact "styles.css" as CSS
+  }
+}
+
+DV ..> MEM : 런타임 데이터 저장
+WB ..> DF : File.readAsArrayBuffer()
+SERVER -right-> WS : 최초 로드 (HTTP/로컬)
+
+note bottom of DV
+  모든 데이터는 브라우저 메모리에만 존재
+  네트워크 통신 전무 (CSP connect-src none)
+  세션 종료 시 데이터 자동 소멸
+end note
+
+@enduml
+{code}
+
+*배포 특징*
+
+- *정적 배포*: 빌드된 정적 파일(HTML/CSS/JS)만으로 구성, 서버 사이드 런타임 불필요
+- *오프라인 동작*: 최초 로드 이후 인터넷 연결 없이 완전 동작 (NFR-4.2)
+- *데이터 로컬리티*: 모든 환자 데이터는 사용자 워크스테이션의 브라우저 메모리에만 존재 (NFR-2.2)
+- *네트워크 격리*: CSP(Content Security Policy) connect-src none 설정으로 외부 통신 원천 차단
+- *지원 브라우저*: Chrome 90+, Edge 90+, Firefox 90+, Safari 15+ (NFR-4.1)
+
+---
+
+*[SAD-05] 데이터 뷰 (Data View)*
+
+*데이터 아키텍처 개요*
+
+DentiView3D는 영구 저장소가 없는 메모리 기반 데이터 아키텍처를 채택한다.
+모든 데이터는 런타임에 브라우저 메모리에만 존재하며, 세션 종료 시 자동 해제된다.
+데이터 흐름은 파일 입력 -> 파싱 -> 메모리 구조체 구성 -> 렌더링의 단방향 파이프라인이다.
+
+*주요 데이터 모델 클래스 다이어그램*
+
+{code}
+@startuml SAD_DataView
+skinparam backgroundColor white
+skinparam classAttributeIconSize 0
+
+class FileInput {
+  +name: string
+  +size: number
+  +type: string
+}
+
+class ParseResult {
+  +isValid: boolean
+  +metadata: DICOMMetadata
+  +pixelData: ArrayBuffer
+  +errors: ParseError[]
+  +warnings: ParseWarning[]
+}
+
+class DICOMMetadata {
+  +rows: number
+  +columns: number
+  +bitsAllocated: number
+  +pixelRepresentation: number
+  +transferSyntaxUID: string
+  +patientInfo: MaskedPatientInfo
+  +imageInfo: ImageInfo
+  +sliceInfo: SliceInfo
+}
+
+class MaskedPatientInfo {
+  +patientName: string [REDACTED]
+  +patientID: string [REDACTED]
+  +patientBirthDate: string [REDACTED]
+  +studyDate: string
+  +modality: string
+}
+
+class ImageInfo {
+  +rows: number
+  +columns: number
+  +bitsAllocated: number
+  +bitsStored: number
+  +highBit: number
+  +pixelRepresentation: number
+  +samplesPerPixel: number
+  +photometric: string
+}
+
+class SliceInfo {
+  +numberOfFrames: number
+  +sliceThickness: number
+  +pixelSpacing: [number, number, number]
+  +imagePositionPatient: [number, number, number]
+}
+
+class VolumeData {
+  +voxelArray: TypedArray
+  +width: number
+  +height: number
+  +depth: number
+  +dataType: string
+  +windowLevel: number
+  +windowWidth: number
+}
+
+class PhiStore {
+  -store: WeakMap
+  +setPhiValue(key, value): void
+  +getPhiValue(key): string | undefined
+  +hasPhi(key): boolean
+}
+
+class ParseError {
+  +code: string
+  +message: string
+  +userMessage: string
+}
+
+class ParseWarning {
+  +code: string
+  +message: string
+  +userMessage: string
+}
+
+FileInput --> ParseResult : parseDICOM()
+ParseResult *-- DICOMMetadata
+ParseResult *-- ParseError
+ParseResult *-- ParseWarning
+DICOMMetadata *-- MaskedPatientInfo
+DICOMMetadata *-- ImageInfo
+DICOMMetadata *-- SliceInfo
+DICOMMetadata --> PhiStore : PHI 원본 참조
+ParseResult --> VolumeData : 변환
+
+note right of PhiStore
+  WeakMap 기반 저장
+  가비지 컬렉션 대상
+  모듈 외부 접근 불가
+  (NFR-2.1, NFR-2.3)
+end note
+
+note bottom of VolumeData
+  TypedArray 종류:
+  Uint8Array (8-bit)
+  Int16Array/Uint16Array (16-bit)
+  Float32Array (기타)
+  (FR-2.1)
+end note
+
+@enduml
+{code}
+
+*데이터 생명주기*
+
+- *로드 단계*: File API -> ArrayBuffer -> DICOM 태그 파싱 -> DICOMMetadata + pixelData 구성
+- *변환 단계*: pixelData -> TypedArray (FR-2.1) -> VolumeData 구조체
+- *렌더링 단계*: VolumeData + WL/WW 파라미터 -> 정규화/클램핑 -> ImageData -> Canvas
+- *해제 단계*: 세션 종료 또는 새 파일 로드 시 기존 ArrayBuffer/TypedArray 자동 GC, WeakMap의 PhiStore도 GC 대상
+
+*데이터 보호 메커니즘*
+
+- PHI 원본 데이터는 WeakMap(PhiStore)에 저장되어 모듈 외부에서 직접 접근 불가 (FR-3.2)
+- 사용자에게 표시되는 환자 정보는 모두 [REDACTED] 마스킹 적용 (FR-3.1)
+- 네트워크 전송이 없으므로 데이터 유출 경로 원천 차단 (NFR-2.2)
+- 세션 종료 시 GC에 의해 메모리 자동 해제, 잔류 데이터 없음 (NFR-2.3)
+
+---
+
+*[SAD-06] 기술 스택 및 구성 요소*
+
+*프로그래밍 언어 및 런타임*
+
+|| 항목 || 기술 || 버전 || 선택 근거 ||
+| 언어 | JavaScript (ES2020+) | ES2020 | Class A 단순성 요구, 빌드 파이프라인 최소화, 브라우저 네이티브 지원 |
+| 런타임 | 웹 브라우저 | Chrome 90+ 등 | 별도 런타임 설치 불필요, 크로스 플랫폼 지원 |
+| 모듈 시스템 | ES Modules | native | 브라우저 네이티브 import/export, 번들러 불필요 |
+
+*프레임워크 및 라이브러리*
+
+|| 항목 || 기술 || 버전 || 선택 근거 ||
+| UI 프레임워크 | Vanilla JS (프레임워크 없음) | - | Class A 단순성, 외부 의존성 최소화, 검증 범위 축소 |
+| 렌더링 | Canvas 2D API | native | MPR 영상 렌더링에 적합, ImageData 직접 조작 가능 |
+| 파일 입출력 | File API / FileReader | native | 브라우저 표준 로컬 파일 읽기, 비동기 지원 |
+| 바이너리 처리 | ArrayBuffer / DataView / TypedArray | native | DICOM 바이너리 파싱에 필수, 엔디안 처리 지원 |
+
+*미들웨어 및 인프라*
+
+|| 항목 || 기술 || 설명 ||
+| 웹 서버 | 정적 파일 서버 | 개발/배포용 (nginx, GitHub Pages 등). 런타임에 서버 불필요 |
+| 빌드 도구 | 없음 (네이티브 ES Modules) | 번들링/트랜스파일 없이 브라우저 직접 실행 |
+| 데이터베이스 | 없음 | 영구 저장소 불필요, 모든 데이터 메모리에만 존재 |
+
+*보안 기술 요소*
+
+|| 항목 || 기술 || 선택 근거 ||
+| CSP | Content-Security-Policy: connect-src none | 외부 네트워크 통신 원천 차단 (NFR-2.2) |
+| PHI 보호 | WeakMap + 모듈 스코프 | 외부 접근 불가한 PHI 저장소 (FR-3.2, NFR-2.1) |
+| 데이터 잔류 방지 | GC 의존 (WeakMap + 세션 종료) | 브라우저 세션 종료 시 자동 해제 (NFR-2.3) |
+
+*기술 선택의 Class A 적합성*
+
+- IEC 62304 Class A는 소프트웨어의 단순성을 요구하므로, 외부 프레임워크/라이브러리 최소화가 핵심 기준
+- Vanilla JS + Canvas 2D API 조합은 검증 가능한 코드 범위를 최소화하고, 빌드 파이프라인 복잡도를 제거
+- ES Modules 네이티브 사용으로 번들러(Webpack, Vite 등) 도입 불필요
+- 네이티브 API만 사용하므로 서드파티 라이브러리의 보안 취약점 영향 없음
+
+---
+
+*[SAD-07] 아키텍처 결정 근거 (ADR) 요약*
+
+본 섹션은 SAD에서 수행한 주요 아키텍처 결정사항을 요약한다.
+각 결정의 상세 내용은 독립적인 ADR 티켓으로 분해되어 관리된다.
+
+*ADR 목록 및 요약*
+
+|| ADR ID || 결정 사항 || 요약 || 관련 컴포넌트 || 관련 FR/NFR ||
+| ADR-1 | Layered Architecture 채택 | 3-계층(Presentation, Business Logic, Data Access) 아키텍처로 관심사 분리. Class A 단순성 요구에 부합 | 전체 시스템 | FR 전체, NFR-4.1 |
+| ADR-2 | 오프라인 전용 아키텍처 | 네트워크 통신 전무, CSP connect-src none으로 외부 통신 차단. 서버 인프라 불필요 | PhiGuard, 전체 시스템 | NFR-2.2, NFR-4.2 |
+| ADR-3 | Vanilla JS + Canvas 2D | 외부 프레임워크 없이 네이티브 API만 사용. Class A 검증 범위 최소화 | MprRenderer, UiController | NFR-4.1 |
+| ADR-4 | 메모리 내 데이터 처리 | 영구 저장소 없이 브라우저 메모리에만 데이터 보관. 세션 종료 시 자동 해제 | DicomParser, PhiGuard | NFR-2.3, NFR-1.3 |
+| ADR-5 | WeakMap 기반 PHI 보호 | 모듈 스코프 + WeakMap으로 PHI 원본 접근 제어. GC 친화적 설계 | PhiGuard | FR-3.1, FR-3.2, NFR-2.1 |
+| ADR-6 | 단일 스레드 처리 모델 | Web Worker 없이 메인 스레드에서 순차 처리. Class A 단순성 확보 | 전체 시스템 | NFR-4.1 |
+
+*ADR 추적성 매트릭스*
+
+|| ADR ID || 구현 컴포넌트 || FR/NFR 티켓 키 ||
+| ADR-1 | COMP-1~7 전체 | PLAYG-1641~1681 (FR/NFR 전체) |
+| ADR-2 | COMP-5 (PhiGuard) | PLAYG-1674, PLAYG-1680 |
+| ADR-3 | COMP-4, COMP-6 | PLAYG-1679 |
+| ADR-4 | COMP-1, COMP-5 | PLAYG-1672, PLAYG-1675 |
+| ADR-5 | COMP-5 (PhiGuard) | PLAYG-1656, PLAYG-1657, PLAYG-1673 |
+| ADR-6 | 전체 시스템 | PLAYG-1679 |
