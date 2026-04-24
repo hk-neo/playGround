@@ -7,12 +7,12 @@
 
 ## 연결된 티켓 요약
 - PA 문서: 0개
-- EA 문서: 1개
+- EA 문서: 15개
 - Hazard: 17개
 - Gate: 1개
 - Document: 2개
-- 기타: 41개
-- **총 62개** 티켓 연결됨
+- 기타: 48개
+- **총 83개** 티켓 연결됨
 
 ## Hazard 티켓
 - **PLAYG-1496**: [HAZ-1.1] 비 DICOM 파일 입력
@@ -24,6 +24,20 @@
 
 ## EA 기존 문서 티켓
 - **PLAYG-1460**: [SRS] DentiView3D 소프트웨어 요구사항 명세서
+- **PLAYG-1766**: [SAD]
+- **PLAYG-1767**: [ADR-1] Layered Architecture 채택
+- **PLAYG-1768**: [ADR-2] 오프라인 전용 아키텍처
+- **PLAYG-1769**: [ADR-3] Vanilla JS + Canvas 2D
+- **PLAYG-1770**: [ADR-4] 메모리 내 데이터 처리
+- **PLAYG-1771**: [ADR-5] WeakMap 기반 PHI 보호
+- **PLAYG-1772**: [ADR-6] 단일 스레드 처리 모델
+- **PLAYG-1773**: [COMP-1.1] DicomParser 컴포넌트
+- **PLAYG-1774**: [COMP-1.2] ValidationModule 컴포넌트
+- **PLAYG-1775**: [COMP-1.3] MetadataParser 컴포넌트
+- **PLAYG-1776**: [COMP-1.4] PhiGuard 컴포넌트
+- **PLAYG-1777**: [COMP-2.1] MprRenderer 컴포넌트
+- **PLAYG-1778**: [COMP-2.2] UiController 컴포넌트
+- **PLAYG-1779**: [COMP-2.3] ErrorManager 컴포넌트
 
 ## EA 문서 내용 (workspace/docs/artifacts/)
 
@@ -648,7 +662,70 @@ N/A
 
 ## Architecture 티켓 상세 (Jira)
 
-(ADR/COMP 티켓을 찾을 수 없습니다)
+### PLAYG-1767 - [ADR-1] Layered Architecture 채택
+
+**Verification Criteria:**
+- 아키텍처 검토: 설계 검토 회의에서 계층 분리 적절성 승인. 각 계층이 하위 계층에만 의존하는지 정적 분석으로 확인.
+
+### PLAYG-1768 - [ADR-2] 오프라인 전용 아키텍처
+
+**Verification Criteria:**
+- CSP 헤더 검증: 브라우저 개발자 도구에서 connect-src none 적용 확인. 네트워크 요청 차단 테스트 수행.
+
+### PLAYG-1769 - [ADR-3] Vanilla JS + Canvas 2D
+
+**Verification Criteria:**
+- 의존성 검증: package.json에 서드파티 런타임 의존성 없음 확인. Canvas 2D API만으로 MPR 렌더링 동작 확인.
+
+### PLAYG-1770 - [ADR-4] 메모리 내 데이터 처리
+
+**Verification Criteria:**
+- 메모리 검증: 세션 종료 후 브라우저 메모리 스냅샷으로 잔류 데이터 없음 확인. 512MB 초과 파일 로딩 차단 테스트.
+
+### PLAYG-1771 - [ADR-5] WeakMap 기반 PHI 보호
+
+**Verification Criteria:**
+- PHI 접근 테스트: 모듈 외부에서 PHI 원본 직접 접근 시도 시 undefined 반환 확인. dumpPhiValues 함수가 barrel 파일에 미노출 확인.
+
+### PLAYG-1772 - [ADR-6] 단일 스레드 처리 모델
+
+**Verification Criteria:**
+- 동시성 검증: 단일 Call Stack으로 순차 실행 확인. 100MB 파일 로딩 시 브라우저 응답성 유지 테스트.
+
+### PLAYG-1773 - [COMP-1.1] DicomParser 컴포넌트
+
+**Verification Criteria:**
+- 단위 테스트: 정상/비정상 DICOM 파일 파싱 결과 검증. IEC 62304 Class A 기준 statement coverage 100% 달성.
+
+### PLAYG-1774 - [COMP-1.2] ValidationModule 컴포넌트
+
+**Verification Criteria:**
+- 단위 테스트: 각 검증 함수에 정상/비정상 입력 시 true/false 반환 확인. 경계값 테스트 포함.
+
+### PLAYG-1775 - [COMP-1.3] MetadataParser 컴포넌트
+
+**Verification Criteria:**
+- 단위 테스트: 다양한 전송 구문(Explicit/Implicit VR LE/BE) 메타데이터 파싱 정확성 검증.
+
+### PLAYG-1776 - [COMP-1.4] PhiGuard 컴포넌트
+
+**Verification Criteria:**
+- 단위 테스트: PHI 마스킹 후 [REDACTED] 표시 확인. 모듈 외부 접근 시 undefined 반환 확인. WeakMap GC 동작 검증.
+
+### PLAYG-1777 - [COMP-2.1] MprRenderer 컴포넌트
+
+**Verification Criteria:**
+- 단위 테스트: 각 단면 렌더링 정확성, WL/WW 클램핑 동작, 슬라이스 인덱스 범위 보정 검증. 성능: 단일 슬라이스 100ms 이내.
+
+### PLAYG-1778 - [COMP-2.2] UiController 컴포넌트
+
+**Verification Criteria:**
+- 단위 테스트: 파일 선택 -> 파싱 -> 렌더링 전체 흐름 검증. 에러 발생 시 UI 복구 동작 확인.
+
+### PLAYG-1779 - [COMP-2.3] ErrorManager 컴포넌트
+
+**Verification Criteria:**
+- 단위 테스트: 7종 에러 코드별 메시지 변환 검증. 내부 구조(offset, tag 등)가 메시지에 포함되지 않음 확인.
 
 ## 사용 가이드
 상세 문서가 필요하면 Jira Toolkit을 사용하세요:
