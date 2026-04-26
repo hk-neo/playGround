@@ -1,252 +1,215 @@
-# Implementation Plan: DentiView3D - DICOM 파서 상수 모듈(constants.js)
+# Implementation Plan: DICOMMetadata 타입 팩토리 (DICOMMetadata.js)
 
-**Branch**: `feature/PLAYG-1816` | **Date**: 2026-04-26 | **Spec**: `docs/spec-kit/01_spec.md`
-**Ticket**: `PLAYG-1816` | **Type**: Detailed Design (SDS-1.1)
+**Branch**: `feature/PLAYG-1817` | **Date**: 2026-04-26 | **Spec**: `docs/spec-kit/01_spec.md`
+**Ticket**: `PLAYG-1817` | **Type**: Detailed Design (SDS-1.2)
 
 ---
 
 ## Summary
 
-DICOM 파서의 최하위 계층 모듈인 `constants.js`의 구현 계획이다. 본 모듈은 파서 전체에서 사용하는
-13개 상수(원시 상수 9개, 구조화 객체 3개, 별칭 1개)를 중앙 집중식으로 정의하며, 비즈니스 로직을
-포함하지 않는 순수 상수 모듈이다.
+본 계획은 DICOM 파일에서 추출하는 28개 메타데이터 속성을 정의하는 `DICOMMetadata` typedef(JSDoc)와
+이를 생성하는 `createDICOMMetadata(overrides?)` 팩토리 함수의 구현을 다룬다.
+Factory Pattern + Object Spread 패턴을 적용하여 순수 객체 리터럴 기반으로 타입 안전성을 확보하며,
+PHI 보호 대상 필드(patientName, patientID, patientBirthDate)의 기본값을 빈 문자열로 설정하여
+phiGuard.js의 마스킹 연동 기반을 제공한다. 외부 의존성 없이 O(1) 성능을 보장한다.
 
-핵심 기술적 결정 사항은 다음과 같다:
-- 에러 코드를 enum 대신 객체 리터럴 문자열 상수로 정의 (IEC 62304 Class A 단순성 준수)
-- 필수 태그에 기본값 없음 → 누락 시 즉시 에러 발생로 안전성 확보
-- ERROR_MESSAGES에 내부 구조 정보 노출 금지 (FR-4.5 보안 요구사항)
-- ErrorCodes는 ERROR_CODES의 @deprecated 별칭으로 하위 호환성 유지
+---
 
----## Technical Context
+## Technical Context
 
-| 항목                     | 내용                                    |
-| ------------------------ | --------------------------------------- |
-| **Language/Version**     | JavaScript (ES Module, ES2022)          |
-| **Primary Dependencies** | 없음 (순수 상수 모듈, 외부 의존성 없음)    |
-| **Storage**              | 해당 없음 (상수 모듈은 스토리지 미사용)    |
-| **Testing**              | Vitest (단위 테스트)                     |
-| **Target Platform**      | 웹 브라우저 (Chrome, Firefox, Edge, Safari) |
-| **Performance Goals**    | 모듈 로딩 시간 1ms 이내, 런타임 오버헤드 없음 |
-| **Constraints**          | IEC 62304 Class A 안전 등급, DICOM 표준 준수 |
+| 항목 | 내용 |
+| --- | --- |
+| **Language/Version** | JavaScript (ES2020+), ESM (`import`/`export`) |
+| **Primary Dependencies** | 없음 (런타임 외부 의존성 0개) |
+| **Storage** | 인메모리 plain object (별도 스토리지 없음) |
+| **Testing** | Vitest 3.x (`viewer/tests/` 디렉토리) |
+| **Target Platform** | 브라우저 (Vite 5.x 번들링) |
+| **Performance Goals** | 팩토리 함수 O(1), 로드 시간 오버헤드 0 |
+| **Constraints** | IEC 62304 Class A, JSDoc typedef만 사용 (class/TypeScript 금지), DICOM PS3.5/PS3.10 준수 |
 
 ---## Constitution Check
 *GATE: 설계 원칙(Constitution) 준수 여부 확인*
 
-- **SOLID 원칙**: 단일 책임 원칙(SRP) 준수 — 상수 정의만 담당하며 비즈니스 로직 미포함.
-  개방-폐쇄 원칙(OCP) 준수 — ERROR_CODES, METADATA_TAGS는 객체 리터럴로 확장 가능하나 수정은 동결(frozen)으로 보호.
-  의존성 역전 원칙(DIP) 준수 — 최하위 모듈로 의존성 없음.
-- **레이어 분리**: Data 계층의 상수 하위 모듈로 위치. 파싱 로직 계층(parseDICOM, metadataParser 등)에
-  상수를 제공하는 공급자 역할. 계층 간 의존성은 소비 모듈 → constants 단방향.
-- **에러 처리 전략**: 에러 코드를 문자열 상수로 정의하여 일관된 에러 식별 제공.
-  ERROR_MESSAGES를 통한 다국어(ko/en) 메시지와 심각도(severity) 매핑.
-  에러 메시지에 내부 구조 정보 노출 금지 (FR-4.5 보안 요구사항 준수).
-  에러 발생 자체는 하지 않으며, 소비 모듈이 ERROR_CODES 값을 참조하여 에러를 발생시킴.
-- **보안 고려사항**: ERROR_MESSAGES의 모든 메시지는 offset, tag hex, 버퍼 주소 등
-  내부 파일 구조 정보를 포함하지 않음 (FR-4.5, HAZ-3.1).
-  MAX_FILE_SIZE(512MB)로 브라우저 메모리 과부하 방지.
-  MAX_TAG_COUNT(10000) 및 MAX_SEQUENCE_DEPTH(10)으로 DoS 공격 방지.
+- **SOLID 원칙**:
+  - SRP(단일 책임): DICOMMetadata.js는 타입 정의와 팩토리 생성이라는 단일 책임만 수행. 파싱 로직(metadataParser.js), PHI 마스킹(phiGuard.js)과 명확히 분리됨
+  - OCP(개방-폐쇄): `overrides` 객체를 통한 확장이 가능하며, 기본 구조 수정 없이 새 필드 추가 가능 (FR-007)
+  - DIP(의존성 역전): metadataParser.js가 DICOMMetadata.js에 의존하며, DICOMMetadata.js는 어떤 모듈에도 의존하지 않음 (의존성 방향: 외부 → 타입 모듈)
+- **레이어 분리**:
+  - `types/` 레이어: 순수 데이터 타입 정의 (DICOMMetadata.js, ParseResult.js)
+  - `data/dicomParser/` 레이어: 파싱 로직 및 PHI 보호
+  - 타입 레이어는 데이터 레이어에 의존하지 않으며, 단방향 의존 보장
+- **에러 처리 전략**:
+  - 팩토리 함수 자체는 예외를 발생시키지 않음. `overrides`가 null/undefined인 경우 빈 객체로 처리 (EC-001)
+  - 필수 태그 누락 검증은 metadataParser.js에서 PARSE_ERR_MISSING_REQUIRED_TAG 에러로 처리
+  - 배열 길이 검증은 팩토리에서 수행하지 않고 소비자 측에서 담당 (EC-003)
+- **보안 고려사항**:
+  - PHI 필드(patientName, patientID, patientBirthDate)는 기본값이 빈 문자열이므로, 팩토리 단계에서 PHI 유출 가능성 없음
+  - 실제 PHI 마스킹은 phiGuard.js에서 WeakMap 기반으로 수행 (NFR-002)
+  - DICOMMetadata.js 자체는 보안 로직을 포함하지 않으나, phiGuard.js 연동을 위한 구조적 기반을 제공함
 
 ---## Project Structure
 
 ### Documentation
 ```text
 docs/
-└── spec-kit/
-    ├── 01_spec.md          # SDS-1.1 상세 설계 명세서
-    ├── 02_plan.md           # 본 문서: 이행 계획
-    └── 03_tasks.md          # 작업 분할 (미래 생성)
+├── spec-kit/
+│   ├── 01_spec.md          # 기능 명세서
+│   ├── 02_plan.md          # 구현 계획서 (본 문서)
+│   └── 03_tasks.md         # 작업 분해 (향후 생성)
+└── artifacts/
+    ├── SRS.md              # 소프트웨어 요구사항 명세
+    ├── SAD.md              # 소프트웨어 아키텍처 설계
+    └── SystemRequirement.md # 시스템 요구사항
 ```
 
 ### Source Code
 ```text
-viewer/
-├── src/
-│   └── data/
-│       └── dicomParser/
-│           ├── constants.js            # [구현 대상] 파서 상수 모듈 (13개 export)
-│           ├── parseDICOM.js           # 소비 모듈: 메인 파서 엔트리 포인트
-│           ├── validateMagicByte.js    # 소비 모듈: 매직 바이트 검증
-│           ├── metadataParser.js       # 소비 모듈: 메타데이터 파싱
-│           ├── pixelDataParser.js      # 소비 모듈: 픽셀 데이터 추출
-│           ├── handleParseError.js     # 소비 모듈: 에러 핸들링
-│           ├── tagReader.js            # 소비 모듈: 태그 읽기
-│           └── metaGroupParser.js      # 소비 모듈: 메타 그룹 파싱
-└── tests/
-    └── unit/
-        └── dicomParser/
-            └── constants.test.js       # [작성 대상] 상수 모듈 단위 테스트 (16개 TC)
+viewer/src/
+├── types/
+│   ├── DICOMMetadata.js    # [구현 대상] DICOMMetadata typedef + createDICOMMetadata 팩토리
+│   └── ParseResult.js      # ParseResult typedef + createParseResult 팩토리 (기존)
+├── data/
+│   ├── dicomParser/
+│   │   ├── metadataParser.js  # 메타데이터 파서 (createDICOMMetadata 소비자)
+│   │   ├── phiGuard.js        # PHI 마스킹 가드 (DICOMMetadata PHI 필드 소비자)
+│   │   ├── ParseContext.js    # 파싱 컨텍스트
+│   │   ├── constants.js       # 파서 상수 (METADATA_TAGS 등)
+│   │   ├── tagReader.js       # 태그 리더
+│   │   ├── metaGroupParser.js # 메타 그룹 파서
+│   │   ├── index.js           # 배럴 파일
+│   │   ├── parseDICOM.js      # 최상위 파서
+│   │   ├── pixelDataParser.js # 픽셀 데이터 파서
+│   │   ├── handleParseError.js # 에러 핸들러
+│   │   ├── validateMagicByte.js # 매직 바이트 검증
+│   │   └── validateTransferSyntax.js # 전송 구문 검증
+│   ├── dicomDictionary.js     # DICOM 태그 사전
+│   └── index.js               # 데이터 레이어 배럴
+├── errors/
+│   └── CBVError.js            # 커스텀 에러 클래스
+├── main.js                    # 애플리케이션 진입점
+└── styles/
+    └── main.css               # 스타일시트
+
+viewer/tests/
+├── setup.js                   # 테스트 설정
+└── unit.test.js               # 단위 테스트 (TC-1.2.1 ~ TC-1.2.6 포함)
 ```
 
 ---## Implementation Approach
 
 ### Phase 순서 및 접근 방식
 
-#### Phase 1: 원시 상수 정의 (Setup)
-**목표**: 의존성 없는 9개 원시 상수 export 구현
+#### Phase 1: Setup (준비)
+- 기존 `viewer/src/types/DICOMMetadata.js` 파일의 현재 구현 상태 확인 완료
+- 기존 코드는 이미 28개 속성 JSDoc typedef와 createDICOMMetadata 팩토리를 포함하고 있음
+- 기존 `viewer/tests/unit.test.js`에 기본 팩토리 테스트 2개 존재
+- Vitest 테스트 환경 구성 완료 (`viewer/package.json`)
 
-| 순서 | 작업 내용 | Export | 추적 |
-| ---- | --------- | ------ | ---- |
-| 1-1  | 프리앰블 길이 상수 정의 | `PREAMBLE_LENGTH = 128` | FR-1.1, FR-CST-01 |
-| 1-2  | 매직 바이트 시그니처 정의 | `DICOM_MAGIC_BYTE = 'DICM'` | FR-1.1, FR-CST-02 |
-| 1-3  | 매직 바이트 오프셋 정의 (PREAMBLE_LENGTH 참조) | `MAGIC_BYTE_OFFSET = 128` | FR-1.1, FR-CST-03 |
-| 1-4  | 최소 파일 크기 상수 정의 | `DICOM_MIN_FILE_SIZE = 132` | FR-1.6, FR-CST-04 |
-| 1-5  | 최대 파일 크기 상수 정의 | `MAX_FILE_SIZE = 536_870_912` | FR-1.4, FR-CST-05 |
-| 1-6  | 최대 태그 순회 수 상수 정의 | `MAX_TAG_COUNT = 10_000` | FR-2.4, FR-CST-06 |
-| 1-7  | 최대 시퀀스 중첩 깊이 상수 정의 | `MAX_SEQUENCE_DEPTH = 10` | FR-2.5, FR-CST-07 |
-| 1-8  | 파일 메타 그룹 번호 상수 정의 | `FILE_META_GROUP = 0x0002` | FR-2.1, FR-CST-08 |
-| 1-9  | 픽셀 데이터 태그 식별자 객체 정의 | `PIXEL_DATA_TAG = Object.freeze({group: 0x7FE0, element: 0x0010})` | FR-1.5, FR-CST-09 |
+#### Phase 2: Core Implementation (핵심 구현)
+- **2-1. DICOMMetadata typedef 보완**
+  - 기존 28개 속성 정의를 검증하고 명세(FR-001)와 일치하는지 확인
+  - 각 속성의 JSDoc `@property` 타입 어노테이션 정확성 검증 (string, number, number[])
+  - `@module types/DICOMMetadata` 모듈 선언 유지
+- **2-2. createDICOMMetadata 팩토리 함수 구현/보완**
+  - `Partial<DICOMMetadata>` 타입의 선택적 인자 `overrides` 지원 (FR-002)
+  - 기본값 규칙 준수: 문자열='', 숫자=0, numberOfFrames=1, bitsAllocated=16 (FR-004)
+  - 배열 기본값은 매 호출 시 새 리터럴 생성: `pixelSpacing: [0, 0]`, `imageOrientationPatient: [1, 0, 0, 0, 1, 0]`, `imagePositionPatient: [0, 0, 0]` (FR-003)
+  - Object Spread(`...overrides`)로 사용자 지정값 병합 (FR-002, FR-007)
+  - null/undefined overrides 시 빈 객체 fallback 처리 (EC-001)
+- **2-3. PHI 필드 기본값 보장**
+  - `patientName`, `patientID`, `patientBirthDate` 속성 기본값 `''` 확인 (FR-005)
+  - phiGuard.js PHI_FIELDS 배열과 정확히 일치하는 필드명 보장
 
-**구현 방식**:
-- 모든 상수는 `export const`로 선언
-- 숫자 리터럴에 숫자 구분 기호(`_`) 사용으로 가독성 향상
-- PIXEL_DATA_TAG는 `Object.freeze()`로 불변성 보장
+#### Phase 3: Testing (테스트)
+- `viewer/tests/unit.test.js`의 기존 `createDICOMMetadata` describe 블록에 TC-1.2.1 ~ TC-1.2.6 테스트 케이스 추가
+  - **TC-1.2.1**: 무인자 호출 시 28개 속성 기본값 검증 (SC-001)
+  - **TC-1.2.2**: `overrides` 전달 시 지정값 반영 + 나머지 기본값 유지 (SC-002)
+  - **TC-1.2.3**: 배열 필드(`pixelSpacing`) override 정확성 검증 (SC-003)
+  - **TC-1.2.4**: 연속 호출 시 참조 독립성 및 참조 오염 방지 검증 (SC-004, HAZ-5.1)
+  - **TC-1.2.5**: 필수 필드 기본값 검증 (rows=0, columns=0, bitsAllocated=16, pixelRepresentation=0) (SC-005, FR-1.3)
+  - **TC-1.2.6**: PHI 필드 3개 빈 문자열 기본값 존재 확인 (SC-006, FR-4.1, HAZ-3.1)
+- 엣지 케이스 테스트 추가:
+  - **EC-001**: `createDICOMMetadata(null)` 및 `createDICOMMetadata(undefined)` 처리
+  - **EC-002**: 정의되지 않은 추가 속성(예: `photometricInterpretation`) 전달 시 포함 여부
+  - **EC-003**: 다른 길이의 배열 전달 시 그대로 반영
+  - **EC-004**: 배열 기본값의 참조 독립성 (매 호출 시 새 배열인지 확인)
 
-#### Phase 2: 에러 코드 및 메시지 구조체 정의 (Core Implementation)
-**목표**: ERROR_CODES, PARSE_ERR_MISSING_REQUIRED_TAG, ERROR_MESSAGES, ErrorCodes 별칭 구현
+#### Phase 4: Integration (연동 검증)
+- metadataParser.js에서 createDICOMMetadata 호출 경로 정상 동작 확인
+- phiGuard.js maskPhiFields()가 DICOMMetadata 객체의 PHI 필드를 정상 마스킹하는지 확인
+- `vitest run --coverage`로 100% 커버리지 달성 확인
 
-| 순서 | 작업 내용 | Export | 추적 |
-| ---- | --------- | ------ | ---- |
-| 2-1  | ERROR_CODES 객체 정의 (7종 에러 코드 문자열) | `ERROR_CODES = Object.freeze({...})` | FR-5.1, FR-CST-10 |
-| 2-2  | PARSE_ERR_MISSING_REQUIRED_TAG 개별 export | `PARSE_ERR_MISSING_REQUIRED_TAG` | FR-1.3, FR-CST-12 |
-| 2-3  | ERROR_MESSAGES 다국어 메시지 맵 정의 | `ERROR_MESSAGES = Object.freeze({...})` | FR-5.2, FR-CST-13 |
-| 2-4  | ErrorCodes @deprecated 별칭 정의 | `ErrorCodes = ERROR_CODES` | FR-5.1, FR-CST-11 |
+### Key Technical Decisions (주요 기술 결정)
 
-**ERROR_CODES 구조**:
-```javascript
-export const ERROR_CODES = Object.freeze({
-  PARSE_ERR_INVALID_MAGIC: 'PARSE_ERR_INVALID_MAGIC',
-  PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX: 'PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX',
-  PARSE_ERR_MISSING_REQUIRED_TAG: 'PARSE_ERR_MISSING_REQUIRED_TAG',
-  PARSE_ERR_PIXEL_DATA_EXTRACTION: 'PARSE_ERR_PIXEL_DATA_EXTRACTION',
-  PARSE_ERR_FILE_READ: 'PARSE_ERR_FILE_READ',
-  PARSE_ERR_FILE_TOO_LARGE: 'PARSE_ERR_FILE_TOO_LARGE',
-  PARSE_ERR_UNEXPECTED: 'PARSE_ERR_UNEXPECTED',
-});
-```
+- **결정 1: Plain Object + JSDoc typedef 방식 채택** (class/TypeScript 대신)
+  - 이유: IEC 62304 Class A 수준의 단순성 요구. 별도 클래스 계층이나 TypeScript 컴파일 단계 없이
+    순수 JavaScript 네이티브 타입만으로 타입 표현. 빌드 파이프라인 단순화 및 런타임 오버헤드 제거 (NFR-003)
 
-**ERROR_MESSAGES 구조** (각 항목은 ko, en, severity 필드 포함):
-```javascript
-export const ERROR_MESSAGES = Object.freeze({
-  [ERROR_CODES.PARSE_ERR_INVALID_MAGIC]: {
-    ko: '...', en: '...', severity: 'error'
-  },
-  // ... 7종
-});
-```
+- **결정 2: Factory Pattern + Object Spread 패턴**
+  - 이유: 생성 시마다 독립적인 새 객체를 보장하며(FR-003), `overrides`를 통한 선언적 커스터마이징이 가능함.
+    Object.assign 대신 Spread 연산자 사용으로 가독성 및 불변성 의도 표현 (FR-002, FR-007)
 
-**보안 검증**:
-- TC-1.16: 모든 메시지에 offset, tag, hex, buffer, 0x 패턴이 포함되지 않았는지 확인
+- **결정 3: 배열 기본값을 인라인 리터럴로 생성**
+  - 이유: 모듈 스코프에서 공유 배열 상수를 정의하면 모든 호출이 동일 참조를 공유하게 되어
+    HAZ-5.1(참조 오염) 위험이 발생. 매 호출 시 새 리터럴(`[0, 0]`)을 생성하여 참조 독립성 보장 (FR-003)
 
-#### Phase 3: 메타데이터 태그 사전 정의 (Core Implementation)
-**목표**: METADATA_TAGS 객체 (15개 태그 정의) 구현
+- **결정 4: 팩토리 함수 내부에서 유효성 검증 수행하지 않음**
+  - 이유: 팩토리는 순수 데이터 생성에만 집중하고, 필수 태그 검증(FR-1.3)은 metadataParser.js에서,
+    배열 길이 검증(EC-003)은 소비자 측에서 수행. 단일 책임 원칙(SRP) 준수
 
-| 순서 | 작업 내용 | 세부 사항 | 추적 |
-| ---- | --------- | --------- | ---- |
-| 3-1  | 필수 태그 4개 정의 | Rows, Columns, BitsAllocated, PixelRepresentation (required=true, defaultValue 없음) | FR-1.3, FR-CST-16 |
-| 3-2  | 선택 태그 11개 정의 | 나머지 태그 (required=false, defaultValue 포함) | FR-2.3, FR-CST-15 |
-
-**METADATA_TAGS 구조** (키는 GGGGEEEE 형식):
-```javascript
-export const METADATA_TAGS = Object.freeze({
-  '00280010': { field: 'rows', name: 'Rows', required: true },
-  '00280011': { field: 'columns', name: 'Columns', required: true },
-  '00280100': { field: 'bitsAllocated', name: 'BitsAllocated', required: true },
-  '00280103': { field: 'pixelRepresentation', name: 'PixelRepresentation', required: true },
-  '00280101': { field: 'bitsStored', name: 'BitsStored', required: false, defaultValue: 16 },
-  // ... 15개 총합
-});
-```
-
-**설계 결정 사항**:
-- 필수 태그(required=true)는 defaultValue 속성 자체를 가지지 않음 → 누락 시 즉시 에러
-- 선택 태그(required=false)는 defaultValue 제공 → 파싱 중단 방지
-- Object.freeze()로 런타임 불변성 보장
-
-#### Phase 4: 단위 테스트 작성 (Testing)
-**목표**: 16개 테스트 케이스(TC-1.1 ~ TC-1.16) 구현
-
-| 순서 | 테스트 그룹 | 포함 TC | 세부 접근 |
-| ---- | ----------- | ------- | --------- |
-| 4-1  | 원시 상수 검증 | TC-1.1 ~ TC-1.4, TC-1.7 ~ TC-1.11 | expect(상수).toBe(예상값) 형태 |
-| 4-2  | ERROR_CODES 무결성 검증 | TC-1.5 | 7종 키 존재 및 값 일치 확인 |
-| 4-3  | METADATA_TAGS 필수 태그 검증 | TC-1.6 | 4개 필수 태그 required=true 확인 |
-| 4-4  | 선택 태그 기본값 검증 | TC-1.15 | 11개 선택 태그 defaultValue 일치 확인 |
-| 4-5  | 별칭 및 개별 export 검증 | TC-1.12, TC-1.13 | 참조 동일성 및 문자열 일치 |
-| 4-6  | ERROR_MESSAGES 보안 검증 | TC-1.14, TC-1.16 | 7종 메시지 구조 완전성 및 내부 구조 미포함 확인 |
-
-**테스트 파일**: `viewer/tests/unit/dicomParser/constants.test.js`
-
-#### Phase 5: 정적 검증 및 리뷰 (Integration)
-**목표**: 코드 품질 및 추적성 최종 확인
-
-| 순서 | 검증 항목 | 방법 |
-| ---- | --------- | ---- |
-| 5-1  | ESLint 통과 | lint 실행 |
-| 5-2  | 전체 TC 통과 | vitest run |
-| 5-3  | 추적성 매트릭스 검증 | 16개 FR-CST ↔ 16개 TC 양방향 매핑 확인 |
-| 5-4  | 코드 리뷰 | 비즈니스 로직 미포함 확인 (AC-1.6) |
-
----### Key Technical Decisions
-
-- **결정 1: 에러 코드를 문자열 상수로 정의 (enum 대신 객체 리터럴)**
-  — 이유: IEC 62304 Class A의 단순성 요구사항을 충족하기 위해 JavaScript enum
-  (또는 외부 라이브러리) 대신 순수 객체 리터럴을 사용. 빌드 도구 추가 없이 ES Module
-  네이티브로 동작하며, 디버깅 시 에러 코드 문자열이 그대로 노출되어 가독성이 높음.
-
-- **결정 2: Object.freeze()로 모든 구조화 객체를 불변화**
-  — 이유: ERROR_CODES, ERROR_MESSAGES, METADATA_TAGS, PIXEL_DATA_TAG는
-  런타임에 절대 수정되지 않아야 하는 안전 критical 상수. freeze를 통해 의도치 않은
-  수정을 원천 차단하고 IEC 62304 Class A의 결정적(deterministic) 동작 보장.
-
-- **결정 3: 필수 태그에 기본값 없음, 선택 태그에만 기본값 제공**
-  — 이유: Rows, Columns, BitsAllocated, PixelRepresentation은 영상 렌더링에
-  필수적인 값으로, 기본값으로 대체할 경우 오진단(misdiagnosis) 위험이 있음.
-  누락 시 즉시 PARSE_ERR_MISSING_REQUIRED_TAG 에러를 발생시켜 안전성 확보.
-  선택 태그는 기본값으로 대체하여 파싱 중단을 방지하고 사용자 경험 개선.
-
-- **결정 4: ErrorCodes를 ERROR_CODES의 @deprecated 별칭으로 유지**
-  — 이유: 기존 handleParseError.js 등 소비 모듈에서 ErrorCodes 이름으로
-  import하는 코드의 하위 호환성 유지. 점진적 마이그레이션을 가능하게 하여
-  급격한 API 변경으로 인한 파괴적 변경 방지.
-
-- **결정 5: ERROR_MESSAGES에 내부 구조 정보 노출 금지**
-  — 이유: FR-4.5 보안 요구사항 및 HAZ-3.1 위험 완화. 최종 사용자에게 offset,
-  tag hex 값, 버퍼 주소 등 내부 파일 구조 정보가 노출되면 악의적 사용자가
-  파일 구조를 역설계할 수 있음. 모든 에러 메시지는 사용자 친화적 설명으로만 구성.
+- **결정 5: PHI 보호 로직을 DICOMMetadata.js에 포함하지 않음**
+  - 이유: 타입 정의 모듈은 보안 로직과 분리되어야 함. PHI 마스킹은 phiGuard.js에서 담당하며,
+    DICOMMetadata.js는 PHI 필드를 빈 문자열 기본값으로 정의하여 마스킹 대상 식별 가능성만 제공 (NFR-002)
 
 ---## Complexity Tracking
 
-본 모듈은 IEC 62304 Class A 안전 등급에 해당하는 순수 상수 모듈로, 복잡도가 낮음.
-그러나 다음 사항에 대한 정당성을 기록함:
+### 복잡도 항목
 
-- **METADATA_TAGS의 15개 태그 정의 볼륨**: 메타데이터 태그 사전이 15개 항목을
-  포함하여 코드 줄 수가 증가하나, 각 항목은 단순 키-값 매핑이며 순환 복잡도는 1임.
-  15개는 DICOM 표준에 명시된 CBCT 영상에 필요한 최소 메타데이터 세트로,
-  태그 누락으로 인한 파싱 실패를 방지하기 위해 전수 정의가 필요함.
+- **CT-001: 28개 속성 전체 기본값 검증의 반복성**
+  - 상황: TC-1.2.1에서 28개 속성을 개별적으로 기본값 검증해야 함
+  - 완화: 테스트 헬퍼 함수 `expectDefaultValues(meta)`를 정의하여 중복 코드 최소화
+  - 정당성: IEC 62304 Class A 요구사항으로 전체 속성 검증은 필수이며, 테스트 가독성을 위해 헬퍼 도입
 
-- **ERROR_CODES와 PARSE_ERR_MISSING_REQUIRED_TAG의 중복 export**:
-  PARSE_ERR_MISSING_REQUIRED_TAG는 ERROR_CODES 객체 내에도 포함되어 있고
-  개별 export로도 존재함. metadataParser.js에서 직접 import하여 사용하는 편의성과
-  코드 가독성을 위해 도입한 패턴으로, DRY 원칙 위반이 아님
-  (동일한 문자열 값을 참조하므로 메모리 중복 없음).
+- **CT-002: metadataParser.js에서 DICOMMetadata에 없는 추가 필드 전달**
+  - 상황: metadataParser.js가 `photometricInterpretation`, `samplesPerPixel` 등 DICOMMetadata typedef에 정의되지 않은 필드를 overrides로 전달
+  - 완화: Object Spread는 추가 속성도 포함하므로 런타임 에러 없이 동작 (FR-007)
+  - 정당성: DICOM 표준의 확장성(Private Tag 등)을 수용하기 위해 엄격한 타입 체크보다 유연성 선택
+  - [NEEDS CLARIFICATION]: 향후 추가 필드를 DICOMMetadata typedef에 공식 포함할지 여부는 metadataParser 리팩토링 시 결정 필요
 
-- **ErrorCodes deprecated 별칭**: 기존 코드베이스와의 호환성을 위해 유지.
-  향후 마이그레이션 완료 시 제거 예정. JSDoc @deprecated 태그로 경고 표시.
+- **CT-003: overrides null/undefined 처리**
+  - 상황: 함수 시그니처에서 `overrides = {}` 기본값을 지정했으나, 명시적으로 null을 전달하면 Spread 시 에러 발생 가능
+  - 완화: 함수 내부에서 `overrides ?? {}` (nullish coalescing)로 방어 코드 추가 예정
+  - 정당성: EC-001 엣지 케이스 대응으로 방어적 프로그래밍 적용
+
+### 위험도 평가
+
+| 항목 | 위험도 | 설명 |
+| --- | --- | --- |
+| 참조 오염 (HAZ-5.1) | 낮음 | 배열 리터럴 인라인 생성으로 이미 완화됨 |
+| PHI 유출 (HAZ-3.1) | 낮음 | 기본값 빈 문자열 + phiGuard 마스킹으로 이중 방어 |
+| 필수 태그 누락 (HAZ-1.3) | 낮음 | 기본값 제공으로 크래시 방지, metadataParser에서 검증 |
+| 추가 필드 전파 | 낮음 | Object Spread로 자연스럽게 처리됨 |
 
 ---## References
 
 - Spec: `docs/spec-kit/01_spec.md`
-- 티켓: `PLAYG-1816`
-- 상위 SDS 티켓: `PLAYG-1815` (SDS Document)
-- SAD 컴포넌트: `SAD COMP-1 (DicomParser)`
-- 관련 요구사항: FR-1.1, FR-1.2, FR-1.3, FR-1.4, FR-1.5, FR-1.6, FR-2.4, FR-2.5, FR-5.1, FR-5.2, FR-4.5
-- 관련 위험 분석: HAZ-1.1, HAZ-1.2, HAZ-1.3, HAZ-1.4, HAZ-1.5, HAZ-3.1, HAZ-5.1, HAZ-5.2
-- 안전 표준: IEC 62304 Class A
+- 티켓: `PLAYG-1817`
+- 구현 대상 파일: `viewer/src/types/DICOMMetadata.js`
+- 테스트 파일: `viewer/tests/unit.test.js`
+- 연동 모듈: `viewer/src/data/dicomParser/metadataParser.js`, `viewer/src/data/dicomParser/phiGuard.js`
+- 관련 문서: `docs/artifacts/SRS.md`, `docs/artifacts/SAD.md`
 
----
+### 추적 매트릭스
 
-## 변경 이력
-
-| 버전 | 날짜 | 변경 내용 | 작성자 |
-| ---- | ---- | --------- | ------ |
-| 0.1.0 | 2026-04-26 | 최초 이행 계획 작성 | AutoDevAgent |
+| 테스트 케이스 | 요구사항 | 위험요소 | 검증 내용 |
+| --- | --- | --- | --- |
+| TC-1.2.1 | FR-001, FR-004, FR-2.3 | - | 무인자 호출 시 28개 속성 기본값 검증 |
+| TC-1.2.2 | FR-002, FR-2.3 | - | overrides 전달 시 지정값 반영 + 나머지 기본값 |
+| TC-1.2.3 | FR-002, FR-2.3 | - | 배열 필드 override 정확성 |
+| TC-1.2.4 | FR-003 | HAZ-5.1 | 참조 독립성 및 참조 오염 방지 |
+| TC-1.2.5 | FR-006, FR-1.3 | HAZ-1.3 | 필수 필드 기본값 (rows=0, columns=0, bitsAllocated=16, pixelRepresentation=0) |
+| TC-1.2.6 | FR-005, FR-4.1 | HAZ-3.1 | PHI 필드 3개 빈 문자열 기본값 존재 |
+| EC-001 | FR-002 | - | null/undefined overrides 처리 |
+| EC-002 | FR-007 | - | 추가 속성 포함 여부 |
+| EC-003 | FR-002 | - | 다른 길이 배열 전달 |
+| EC-004 | FR-003 | HAZ-5.1 | 배열 기본값 참조 독립성 |
