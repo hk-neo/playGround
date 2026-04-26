@@ -4,51 +4,24 @@
   "high_count": 0,
   "issues": [
     {
-      "id": "ARCH-1",
-      "severity": "LOW",
-      "description": "MAGIC_BYTE_OFFSET(128)과 PREAMBLE_LENGTH(128)이 동일한 값을 가지지만 별도 상수로 정의됨. DRY 원칙 측면에서 MAGIC_BYTE_OFFSET = PREAMBLE_LENGTH로 참조 가능하나, 의미적 명확성을 위해 별도 유지하는 것이 명세 의도에 부합함.",
-      "fixed": false
-    },
-    {
-      "id": "ARCH-2",
-      "severity": "LOW",
-      "description": "ErrorCodes는 ERROR_CODES의 별칭이나 Object.freeze된 원본의 참조를 공유하므로 별칭을 통한 수정도 원본에 영향을 줄 수 없어 안전함. @deprecated JSDoc 태그로 마이그레이션 유도 중.",
-      "fixed": false
-    },
-    {
-      "id": "ARCH-3",
-      "severity": "MEDIUM",
-      "description": "METADATA_TAGS의 pixelSpacing 기본값 [1, 1] 배열이 Object.freeze 대상 내에 있으나, 배열 자체는 freeze되지 않아 소비 모듈에서 의도치 않은 수정 가능성이 있음. 중첩 객체에 대한 deep freeze가 필요할 수 있음.",
-      "fixed": false
-    },
-    {
-      "id": "SEC-1",
-      "severity": "MEDIUM",
-      "description": "ERROR_MESSAGES의 메시지 문자열에 내부 구조(offset, tag hex, buffer, 0x 패턴)가 포함되지 않았는지 TC-1.16 테스트가 아직 작성되지 않아 보안 검증이 수동 코드 리뷰에만 의존함. 테스트 자동화 필요.",
-      "fixed": false
-    },
-    {
-      "id": "PERF-1",
-      "severity": "LOW",
-      "description": "Object.freeze()는 모듈 로딩 시 1회만 실행되므로 런타임 오버헤드 없음. 순수 상수 모듈이므로 성능 이슈 없음.",
-      "fixed": false
-    },
-    {
       "id": "CQ-1",
-      "severity": "HIGH",
-      "description": "constants.js L98: PARSE_ERR_PIXEL_DATA_EXTRACTION 에러 메시지 한국어에 오타 발견. '필셀 데이터' -> '픽셀 데이터' (ㅅ과 ㅅㅣ 오타). 의료소프트웨어 사용자 대면 메시지이므로 정확성 필수.",
-      "fixed": true
+      "severity": "MEDIUM",
+      "description": "expectDefaultValues 헬퍼 함수 JSDoc에 '28개 속성'으로 기재되어 있으나 실제는 27개 속성 검증. TC-1.2.1 테스트 설명에도 '28개 속성'으로 표기됨. 주석-구현 불일치.",
+      "location": "viewer/tests/unit.test.js L169 (expectDefaultValues JSDoc), L187 (TC-1.2.1 설명)",
+      "fixed": false
     },
     {
       "id": "CQ-2",
       "severity": "MEDIUM",
-      "description": "기존 테스트(unit.test.js)에서 PARSE_ERR_FILE_TOO_LARGE 에러 코드에 대한 검증이 누락되어 있음 (TC-1.5에서 6종만 검사, 7종 중 FILE_TOO_LARGE 누락).",
-      "fixed": false
+      "description": "ParseResult.js(createParseResult)에 null/undefined 방어 로직(overrides ?? {})이 누락됨. DICOMMetadata.js에만 추가되어 일관성 부족. createParseResult(null) 호출 시 TypeError 발생 가능.",
+      "location": "viewer/src/types/ParseResult.js L45 (...overrides Spread)",
+      "fixed": true
     },
     {
       "id": "CQ-3",
-      "severity": "MEDIUM",
-      "description": "명세 TC-1.7~TC-1.16 중 다수의 테스트 케이스(MAGIC_BYTE_OFFSET, MAX_TAG_COUNT, MAX_SEQUENCE_DEPTH, FILE_META_GROUP, PIXEL_DATA_TAG, ErrorCodes 별칭, PARSE_ERR_MISSING_REQUIRED_TAG 개별 export, ERROR_MESSAGES 구조, 메시지 보안, 선택 태그 기본값)가 아직 테스트 파일에 구현되지 않음.",
+      "severity": "LOW",
+      "description": "expectDefaultValues 내부 주석에 '문자열 9개 (빈 문자열)'로 기재되었으나 실제 검증하는 문자열 속성은 12개임. 주석-구현 불일치.",
+      "location": "viewer/tests/unit.test.js L171",
       "fixed": false
     }
   ]

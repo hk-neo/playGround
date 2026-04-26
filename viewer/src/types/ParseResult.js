@@ -27,11 +27,12 @@
  * @returns {ParseResult}
  */
 export function createParseResult(overrides = {}) {
+  const safe = overrides ?? {};
   return {
     metadata: null,
     voxelData: null,
     errors: [],
     isValid: false,
-    ...overrides,
+    ...safe,
   };
 }
