@@ -1,24 +1,20 @@
-## PLAYG-1819 !plan 작업 요약
+## PLAYG-1818 !plan 작업 요약
 
 ### 실행 경로
-- 티켓 유형: Detailed Design (task 경로)
+- 티켓 유형: Detailed Design (task 카테고리로 분류)
 - 선택된 경로: task (Spec-Kit 3종 생성)
 
 ### 생성된 산출물
-- docs/spec-kit/01_spec.md (17,577 bytes / 368 lines)
-- docs/spec-kit/02_plan.md (15,862 bytes / 283 lines)
-- docs/spec-kit/03_tasks.md (15,484 bytes / 284 lines)
+- docs/spec-kit/01_spec.md (287줄, ParseResult 타입 팩토리 명세서)
+- docs/spec-kit/02_plan.md (기술 계획서)
+- docs/spec-kit/03_tasks.md (482줄, 10개 태스크 분할)
 
 ### 전역 문서 갱신
-- 전역 문서(PRD/SRS/Architecture) 갱신 없음
-- 상세 설계(SDS) 수준의 세부 구현에 해당하여 Spec-Kit만 생성
+- 없음 (task 경로이므로 전역 문서 미수정)
 
-### 주요 설계 내용
-- CBVError 기본 클래스: Error 상속, message/name/code/context 속성
-- 5개 하위 클래스: ParseError, ValidationError, RenderError, SecurityError, MemoryError
-- IEC 62304 Class A 준수, PHI 보호, 내부 구조 노출 금지
-- 12개 태스크(T001~T-INT-02), 23개 단위 테스트, 예상 소요 12.5시간
-
-### 비고
-- [NEEDS CLARIFICATION] constants.js에 CBV_000 기본 에러 코드 정의 여부 확인 필요
-- [NEEDS CLARIFICATION] constants.js와 CBVError.js 간 순환 의존성 여부 확인 필요
+### 핵심 설계 내용
+- ParseResult 타입: metadata(Object|null), voxelData(ArrayBuffer|null), errors(ErrorResult[]), isValid(boolean)
+- ErrorResult 타입: userMessage, debugInfo, errorCode(PARSE_ERR_*), severity(error|warning)
+- createParseResult(overrides={}) 팩토리 함수: 스프레드 병합 방식
+- parseDICOM.js 7개 호출 지점 매핑
+- 추적성: FR-1.1~FR-1.5, FR-2.3, FR-3.1 / COMP-1 / SAD parseDICOM 인터페이스

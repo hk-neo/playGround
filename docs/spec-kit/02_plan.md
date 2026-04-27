@@ -1,50 +1,39 @@
-# Implementation Plan: CBVError 에러 클래스 계층
+# Implementation Plan: DentiView3D - ParseResult 타입 팩토리
 
-**Branch**: `feature/PLAYG-1819` | **Date**: 2026-04-27 | **Spec**: `docs/spec-kit/01_spec.md`
-**Ticket**: `PLAYG-1819` | **Type**: Detailed Design (SDS-2.1)
+**Branch**: `feature/PLAYG-1818` | **Date**: 2026-04-27 | **Spec**: `docs/spec-kit/01_spec.md`
+**Ticket**: `PLAYG-1818` | **Type**: Detailed Design (task)
 
 ---
 
 ## Summary
 
-DentiView3D 웹 기반 CBCT 영상 뷰어의 전체 오류 분류 체계를 제공하는 커스텀 에러 클래스 계층을 구현한다.
-CBVError 기본 클래스(Error 상속)와 5개 하위 클래스(ParseError, ValidationError, RenderError, SecurityError, MemoryError)를
-정의하여 일관된 에러 처리 인터페이스를 제공한다. IEC 62304 Class A 요구사항에 따라 구조화된 에러 코드와 추적 가능한
-에러 정보를 보장하며, PHI 정보 보호 및 내부 구조 노출 방지 등 보안 제약을 준수한다.
-모든 에러는 handleParseError.js를 통해 ErrorResult({userMessage, debugInfo, errorCode, severity}) 객체로 변환되어
-ParseResult.errors 배열에 포함된다.
-
+ParseResult.js 모듈은 DICOM 파일 파싱 결과를 표준화된 객체 구조로 반환하는 타입 팩토리 모듈이다.
+createParseResult() 팩토리 함수와 ParseResult/ErrorResult JSDoc 타입 정의를 제공하며,
+parseDICOM.js 파이프라인의 7개 분기점에서 호출되어 파싱 결과(metadata, voxelData, errors, isValid)를
+일관된 구조로 조립한다. UiController(COMP-6)는 isValid 필드를 기준으로 정상/오류 분기를 처리한다.
+IEC 62304 Class A 요구사항에 따라 단순성, 추적성, 테스트 용이성을 보장한다.
 ---
 
 ## Technical Context
 
-| 항목                     | 내용                                                    |
-| ------------------------ | ------------------------------------------------------- |
-| **Language/Version**     | JavaScript (ES6+), ECMAScript 2020 호환                  |
-| **Primary Dependencies** | 없음 (순수 JavaScript, 외부 런타임 의존성 없음)            |
-| **Storage**              | 해당 없음 (에러 클래스 계층, 상태 저장 없음)               |
-| **Testing**              | Jest (단위 테스트), ESLint (정적 분석)                     |
-| **Target Platform**      | 웹 브라우저 (Chrome, Firefox, Edge 최신 2버전)             |
-| **Performance Goals**    | 에러 객체 생성 < 1ms, 프로토타입 체인 검증 오버헤드 최소화 |
-| **Constraints**          | IEC 62304 Class A 준수, PHI 포함 금지, 내부 구조 노출 금지 |
-
+| 항목                     | 내용                    |
+| ------------------------ | ----------------------- |
+| **Language/Version**     | JavaScript (ES2020+), ESM 모듈 시스템 |
+| **Primary Dependencies** | 없음 (순수 Vanilla JS, 제로 외부 의존성) |
+| **Storage**              | 메모리 내 객체 생성 (지속성 저장 없음) |
+| **Testing**              | Vitest (단위 테스트), JSDoc @typedef 기반 타입 검증 |
+| **Target Platform**      | Chrome 90+ (현대 웹 브라우저) |
+| **Performance Goals**    | 객체 생성 < 0.1ms (단순 팩토리), 메모리 오버헤드 최소화 |
+| **Constraints**          | IEC 62304 Class A 단순성 요구, 외부 라이브러리 사용 금지, 불변 기본값 제공 |
 ---
 
 ## Constitution Check
 *GATE: 설계 원칙(Constitution) 준수 여부 확인*
 
-- **SOLID 원칙**:
-  - **단일 책임 원칙(SRP)**: 각 에러 클래스는 단일 오류 범주(파싱/검증/렌더링/보안/메모리)만 담당한다.
-  - **개방-폐쇄 원칙(OCP)**: CBVError 기본 클래스를 상속하여 새로운 에러 유형을 확장 가능하며, 기본 클래스 수정이 불필요하다.
-  - **리스코프 치환 원칙(LSP)**: 모든 하위 클래스는 CBVError 및 Error의 instanceof 체인을 유지하여 기대 동작을 보장한다.
-  - **의존성 역전 원칙(DIP)**: constants.js의 ERROR_CODES를 통해 에러 코드 정의를 추상화하고, 구체적인 코드값에 대한 직접 의존을 최소화한다.
-- **레이어 분리**: 에러 클래스 계층은 순수 도메인 모델로서 프레젠테이션 계층(UI)과 데이터 계층(파서) 모두에서 독립적으로 사용 가능하다. ErrorResult 변환은 handleParseError.js가 담당하여 에러 정의와 에러 표현을 분리한다.
-- **에러 처리 전략**: 계층적 에러 분류(base -> specific) + 구조화된 에러 코드( PREFIX_XXX ) + ErrorResult 변환 패턴을 채택한다. 모든 에러는 catch 블록에서 타입 기반 분기(instanceof)로 처리 가능하다.
-- **보안 고려사항**:
-  - context 객체에 PHI(보호대상건강정보: 환자명, 환자ID, 생년월일 등) 포함을 절대 금지한다.
-  - ErrorResult.userMessage에는 offset, tag 경로, buffer 주소 등 내부 파싱 구조 정보를 노출하지 않는다.
-  - SecurityError는 보안 위반 내용이 사용자 메시지에 노출되지 않도록 별도 검증 로직을 포함한다.
-  - debugInfo는 개발 환경에서만 접근 가능하도록 환경 변수 기반 게이트를 적용한다.
+- **SOLID 원칙**: SRP 준수 - ParseResult.js는 오직 파싱 결과 객체 생성이라는 단일 책임만 수행. OCP 준수 - overrides 확장 포인트로 새로운 필드 추가 시 함수 수정 불필요.
+- **레이어 분리**: Business Logic Layer의 타입 정의 모듈로서, DicomParser(COMP-1)가 생성한 결과를 Presentation Layer(UiController, MprRenderer)로 전달하는 계층 간 계약(Contract) 역할 수행.
+- **에러 처리 전략**: errors 배열에 ErrorResult[] 타입으로 구조화된 에러를 누적 저장. severity 필드로 error/warning 등급을 구분하여 UiController에서 분기 처리 가능.
+- **보안 고려사항**: ParseResult 자체는 PHI 데이터를 직접 다루지 않으나, metadata 객체에 포함된 PHI 필드는 PhiGuard(COMP-5)에서 이미 마스킹 처리된 상태로 전달받음. debugInfo 필드는 내부 구조 노출 금지 원칙(FR-4.5)에 따라 사용자 메시지와 분리 저장.
 
 ---
 
@@ -54,33 +43,48 @@ ParseResult.errors 배열에 포함된다.
 ```text
 docs/
 ├── spec-kit/
-│   ├── 01_spec.md              # 제품 명세서 (CBVError 에러 클래스 계층)
-│   ├── 02_plan.md              # 구현 계획서 (본 문서)
-│   └── 03_tasks.md             # 태스크 분해 (향후 작성)
-└── artifacts/
-    ├── SRS.md                  # 소프트웨어 요구사항 명세서
-    └── SAD.md                  # 소프트웨어 아키텍처 설계
+│   ├── 01_spec.md          # ParseResult 타입 팩토리 명세서
+│   ├── 02_plan.md          # 본 문서 (이행 계획서)
+│   └── 03_tasks.md         # 작업 분할 구조 (WBS)
+├── artifacts/
+│   ├── SRS.md              # 소프트웨어 요구사항 명세서
+│   ├── SAD.md              # 소프트웨어 아키텍처 명세서
+│   ├── SystemRequirement.md # 시스템 요구사항
+│   └── _draft_context.md   # 초안 컨텍스트
+└── viewer/                 # 소스코드 루트
 ```
 
 ### Source Code
 ```text
 viewer/src/
+├── types/
+│   └── ParseResult.js      # ParseResult 타입 팩토리 (본 구현 대상)
+├── data/
+│   └── dicomParser/
+│       ├── parseDICOM.js   # createParseResult() 7회 호출 (COMP-1)
+│       ├── validateMagicByte.js
+│       ├── validateTransferSyntax.js
+│       ├── metaGroupParser.js
+│       ├── metadataParser.js
+│       ├── pixelDataParser.js
+│       ├── handleParseError.js
+│       └── constants.js
 ├── errors/
-│   ├── CBVError.js             # CBVError 기본 클래스 + 5개 하위 클래스 (본 구현 대상)
-│   └── handleParseError.js     # CBVError -> ErrorResult 변환 핸들러
-├── constants/
-│   └── constants.js            # ERROR_CODES, ERROR_MESSAGES, SEVERITY_LEVELS 정의
-└── parsers/
-    ├── ParseResult.js          # 파싱 결과 타입 (errors 배열 포함)
-    ├── parseDICOM.js           # DICOM 파싱 파이프라인 (ParseError 발생)
-    ├── pixelDataParser.js      # 픽셀 데이터 파서 (ParseError 발생)
-    └── metadataParser.js       # 메타데이터 파서 (ParseError 발생)
+│   └── CBVError.js         # ParseError 클래스 정의
+├── ui/
+│   └── UiController.js     # isValid 분기 처리 (COMP-6)
+└── security/
+    └── PhiGuard.js         # PHI 마스킹 처리 (COMP-5)
+```
 
+### Test Code
+```text
 viewer/tests/
 └── unit/
-    └── errors/
-        └── CBVError.test.js    # CBVError 계층 단위 테스트
+    └── types/
+        └── ParseResult.test.js   # createParseResult 단위 테스트
 ```
+
 
 ---
 
@@ -88,195 +92,206 @@ viewer/tests/
 
 ### Phase 순서 및 접근 방식
 
-#### Phase 1: Setup (사전 준비)
-- constants.js의 ERROR_CODES 객체에 CBVError 계층에서 사용할 모든 에러 코드가 정의되어 있는지 확인한다.
-  이미 정의된 코드: PARSE_ERR_INVALID_MAGIC, PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX, PARSE_ERR_MISSING_REQUIRED_TAG,
-  PARSE_ERR_PIXEL_DATA_EXTRACTION, PARSE_ERR_FILE_READ, PARSE_ERR_FILE_TOO_LARGE, PARSE_ERR_UNEXPECTED,
-  VALIDATE_001, RENDER_001, SECURITY_001, MEMORY_001
-- CBV_000 (기본 에러 코드)이 constants.js에 정의되어 있지 않다면 추가 필요 [NEEDS CLARIFICATION: CBV_000이 constants.js에 이미 정의되어 있는지 확인 필요]
-- Jest 테스트 환경이 viewer/ 프로젝트에 설정되어 있는지 확인한다.
+1. **Phase 1 - JSDoc 타입 정의 (ErrorResult, ParseResult)**
+   - ErrorResult typedef: userMessage, debugInfo, errorCode, severity 4개 필드 정의
+   - ParseResult typedef: metadata, voxelData, errors, isValid 4개 필드 정의
+   - 모든 필드에 JSDoc @property와 타입 주석 작성
+   - 추적성: FR-5.1 (구조화된 에러 코드)과 연계
 
-#### Phase 2: Core Implementation (핵심 구현)
+2. **Phase 2 - createParseResult() 팩토리 함수 구현**
+   - 기본값 객체 { metadata: null, voxelData: null, errors: [], isValid: false } 정의
+   - overrides 스프레드 병합 로직 구현
+   - 방어적 복사: errors 배열은 항상 새 배열 참조 보장
+   - 추적성: FR-1.1~FR-1.5, FR-2.3, FR-3.1 검증 결과를 표준 구조로 래핑
 
-**Step 2-1: CBVError 기본 클래스 구현**
-```javascript
-class CBVError extends Error {
-  constructor(message, code = 'CBV_000', context = {}) {
-    super(message);
-    this.name = 'CBVError';
-    this.code = code;
-    this.context = context;
-  }
-}
-```
-- `Object.setPrototypeOf` 또는 `Reflect.setPrototypeOf`를 사용하지 않고 ES6 클래스 상속으로 프로토타입 체인을 자동 설정한다.
-- `instanceof CBVError`, `instanceof Error` 모두 `true`를 반환해야 한다.
-- `context` 매개변수 기본값을 `{}`로 설정하여 호출부에서 생략 가능하도록 한다.
+3. **Phase 3 - parseDICOM.js 연동 검증**
+   - parseDICOM.js 내 7개 createParseResult() 호출 지점 확인:
+     - (1) 파일 크기 초과 시: errors + isValid=false
+     - (2) 매직 바이트 불일치 시: errors + isValid=false
+     - (3) 전송 구문 미지원 시: errors + isValid=false
+     - (4) 메타데이터 파싱 실패 시: errors + isValid=false
+     - (5) 필수 에러 존재 시: metadata + errors + isValid=false
+     - (6) 픽셀 데이터 추출 실패 시: metadata + errors + isValid=false
+     - (7) 정상 완료 시: metadata + voxelData + errors + isValid=true
+   - UiController(COMP-6)에서 result.isValid 분기 확인
 
-**Step 2-2: ParseError 하위 클래스 구현**
-```javascript
-class ParseError extends CBVError {
-  constructor(message, code = 'PARSE_ERR_UNEXPECTED', context = {}) {
-    super(message, code, context);
-    this.name = 'ParseError';
-  }
-}
-```
-- 기본 에러 코드를 PARSE_ERR_UNEXPECTED로 설정하여 코드 미지정 시 catch-all 동작을 보장한다.
-- 7종 파싱 에러 코드(PARSE_ERR_INVALID_MAGIC 등)는 constants.js에서 import하여 생성자에 전달한다.
-- context에 누락된 태그 정보, 파일 크기, 전송 구문 등 파싱 관련 메타데이터를 포함할 수 있으나,
-  PHI 정보(환자명, 환자ID, 생년월일)는 절대 포함하지 않는다.
+4. **Phase 4 - 단위 테스트 작성**
+   - 기본값 생성 테스트 (인자 없이 호출)
+   - overrides 병합 테스트 (부분/전체 필드 덮어쓰기)
+   - errors 배열 독립성 테스트 (참조 분리 검증)
+   - isValid 불리언 타입 검증
+   - 엣지 케이스: 빈 객체, null 메타데이터, 대량 errors 배열
 
-**Step 2-3: ValidationError 하위 클래스 구현**
-```javascript
-class ValidationError extends CBVError {
-  constructor(message, code = 'VALIDATE_001', context = {}) {
-    super(message, code, context);
-    this.name = 'ValidationError';
-  }
-}
-```
+5. **Phase 5 - 정적 분석 및 코드 리뷰**
+   - ESLint 통과 확인
+   - JSDoc 타입 일관성 검증
+   - IEC 62304 Class A 추적성 매트릭스 업데이트
 
-**Step 2-4: RenderError 하위 클래스 구현**
-```javascript
-class RenderError extends CBVError {
-  constructor(message, code = 'RENDER_001', context = {}) {
-    super(message, code, context);
-    this.name = 'RenderError';
-  }
-}
-```
-
-**Step 2-5: SecurityError 하위 클래스 구현**
-```javascript
-class SecurityError extends CBVError {
-  constructor(message, code = 'SECURITY_001', context = {}) {
-    super(message, code, context);
-    this.name = 'SecurityError';
-  }
-}
-```
-- 생성자 내부에서 context에 PHI 필드가 포함되었는지 검증하고, 포함된 경우 해당 필드를 제거하는 안전장치를 고려한다.
-
-**Step 2-6: MemoryError 하위 클래스 구현**
-```javascript
-class MemoryError extends CBVError {
-  constructor(message, code = 'MEMORY_001', context = {}) {
-    super(message, code, context);
-    this.name = 'MemoryError';
-  }
-}
-```
-
-**Step 2-7: 모듈 내보내기**
-```javascript
-export { CBVError, ParseError, ValidationError, RenderError, SecurityError, MemoryError };
-```
-- 단일 파일(CBVError.js)에 모든 클래스를 정의하고 명명된 export로 일괄 공개한다.
-- 파일 크기가 작고(예상 100~150줄) 클래스 간 강한 응집도를 고려할 때 단일 파일이 적절하다.
-
-#### Phase 3: Testing (테스트 구현)
-
-**테스트 파일**: viewer/tests/unit/errors/CBVError.test.js
-
-| 테스트 ID | 테스트 항목 | 검증 내용 |
-|-----------|------------|-----------|
-| T-01 | CBVError 기본 생성 | message='테스트', name='CBVError', code='CBV_000', context={} 확인 |
-| T-02 | CBVError 커스텀 코드 | code='CUSTOM_001' 전달 시 정상 설정 확인 |
-| T-03 | CBVError instanceof 체인 | error instanceof Error === true 확인 |
-| T-04 | ParseError 기본 생성 | name='ParseError', code='PARSE_ERR_UNEXPECTED' 확인 |
-| T-05 | ParseError + PARSE_ERR_INVALID_MAGIC | 에러 코드 정상 설정 확인 |
-| T-06 | ParseError + PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX | 에러 코드 정상 설정 확인 |
-| T-07 | ParseError + PARSE_ERR_MISSING_REQUIRED_TAG | 에러 코드 + context.tag 확인 |
-| T-08 | ParseError + PARSE_ERR_PIXEL_DATA_EXTRACTION | 에러 코드 정상 설정 확인 |
-| T-09 | ParseError + PARSE_ERR_FILE_READ | 에러 코드 정상 설정 확인 |
-| T-10 | ParseError + PARSE_ERR_FILE_TOO_LARGE | 에러 코드 + context.fileSize 확인 |
-| T-11 | ParseError + PARSE_ERR_UNEXPECTED | 에러 코드 + context.originalError 확인 |
-| T-12 | ParseError instanceof 체인 | instanceof ParseError, CBVError, Error 모두 true |
-| T-13 | ValidationError 생성 | name='ValidationError', code='VALIDATE_001' 확인 |
-| T-14 | ValidationError instanceof | instanceof CBVError, Error 모두 true |
-| T-15 | RenderError 생성 | name='RenderError', code='RENDER_001' 확인 |
-| T-16 | RenderError instanceof | instanceof CBVError, Error 모두 true |
-| T-17 | SecurityError 생성 | name='SecurityError', code='SECURITY_001' 확인 |
-| T-18 | SecurityError PHI 필터링 | context에 PHI 필드 포함 시 제거/차단 확인 |
-| T-19 | SecurityError instanceof | instanceof CBVError, Error 모두 true |
-| T-20 | MemoryError 생성 | name='MemoryError', code='MEMORY_001' 확인 |
-| T-21 | MemoryError instanceof | instanceof CBVError, Error 모두 true |
-| T-22 | context PHI 미포함 검증 | 모든 에러 context에 환자명/ID/생년월일 미포함 확인 |
-| T-23 | 에러 코드 constants.js 일치 | 각 클래스 기본 코드가 ERROR_CODES에 존재하는지 확인 |
-
-#### Phase 4: Integration (연동 검증)
-- handleParseError.js에서 CBVError 계열 에러를 ErrorResult로 정상 변환하는지 확인한다.
-- ParseResult.js의 errors 배열에 에러가 정상 포함되는지 확인한다.
-- parseDICOM.js 파이프라인에서 ParseError 발생 시 전체 흐름이 명세대로 동작하는지 통합 테스트를 수행한다.
-- ErrorResult.userMessage에 내부 구조 정보(offset, tag, buffer)가 노출되지 않는지 검증한다.
 
 ### Key Technical Decisions
 
-- **결정 1: 단일 파일에 모든 에러 클래스를 배치**
-  - 이유: 6개 클래스의 총 코드량이 100~150줄 수준으로 작으며, 클래스 간 강한 응집도(동일한 상속 계층, 동일한 생성자 패턴)를 가진다.
-  파일 분리 시 import/export 오버헤드만 증가하고 유지보수 이점이 미미하다.
-  다만, 향후 에러 클래스가 10개 이상으로 확장되면 파일 분리를 재검토한다.
+- **결정 1: 팩토리 함수 패턴 채택 (createClass 대신 createParseResult)**
+  - 이유: IEC 62304 Class A 단순성 원칙에 부합. new 키워드 없이 순수 객체 반환으로
+    프로토타입 체인 복잡성을 제거하고, 테스트가 직관적이며, 메모리 오버헤드가 최소화됨.
+    spread 연산자를 통한 불변 기본값 + 선택적 덮어쓰기 패턴은 파싱 파이프라인의
+    다양한 분기점에서 일관된 결과 생성을 보장함.
 
-- **결정 2: ES6 class extends를 사용한 프로토타입 체인 구성**
-  - 이유: Babel 트랜스파일 없이도 최신 브라우저에서 ES6 클래스 상속이 완벽하게 동작한다.
-  `Object.setPrototypeOf(this, NewType.prototype)` 같은 수동 체인 조작은 가독성이 떨어지고 유지보수가 어렵다.
-  ES6 class extends를 사용하면 `instanceof` 검사가 모든 상위 클래스에 대해 자동으로 true를 반환한다.
+- **결정 2: errors 배열을 ErrorResult[] 타입으로 구조화**
+  - 이유: FR-5.1 (구조화된 에러 코드) 요구사항 충족. 단순 문자열 배열 대신
+    userMessage, debugInfo, errorCode, severity를 포함한 구조화된 객체 배열로
+    설계하여 UiController에서 사용자용/개발자용 메시지 분리 표시가 가능함.
+    severity 필드는 error/warning 등급 구분으로 필수 에러와 경고를 명확히 분리함.
 
-- **결정 3: 에러 코드를 constants.js에서 중앙 관리**
-  - 이유: IEC 62304 Class A 추적성 요구사항에 따라 모든 에러 코드는 단일 소스(constants.js)에서 관리되어야 한다.
-  에러 코드의 중복 정의를 방지하고, 코드-메시지 매핑을 일원화한다.
+- **결정 3: JSDoc @typedef 기반 타입 정의 (TypeScript 대신)**
+  - 이유: 프로젝트가 순수 JavaScript ESM 환경이며, IEC 62304 Class A 요구사항에 따라
+    빌드 파이프라인(컴파일 단계) 추가를 최소화해야 함. JSDoc @typedef는 IDE 지원과
+    Vitest 테스트에서 타입 힌트를 제공하면서도 별도 컴파일 없이 브라우저에서
+    직접 실행 가능함.
 
-- **결정 4: 생성자 context 기본값으로 빈 객체 {} 사용**
-  - 이유: context 없이 생성된 에러도 `error.context.xxx` 접근 시 TypeError가 발생하지 않도록 안전한 기본값을 제공한다.
-  null 또는 undefined를 기본값으로 사용하면 하위 소비자(handleParseError.js 등)에서 null 체크가 추가로 필요하다.
+- **결정 4: metadata 필드에 null 허용 (옵셔널)**
+  - 이유: DICOM 파일 파싱 초기 단계(매직 바이트 불일치, 전송 구문 미지원)에서는
+    메타데이터를 추출하기 전에 실패가 발생할 수 있음. 이 경우 metadata: null로
+    설정하고 errors에 원인을 기록하여 UiController가 유효하지 않은 결과를
+    명확히 식별할 수 있도록 함.
 
-- **결정 5: SecurityError에 PHI 필터링 안전장치 미적용 (명세 수준에서만 제약 명시)**
-  - 이유: PHI 필터링은 에러 클래스 생성자가 아닌 handleParseError.js의 ErrorResult 변환 단계에서 수행하는 것이 더 적절하다.
-  에러 클래스는 원인 정보를 충실하게 보존하고, 표현 계층(ErrorResult)에서 보안 필터링을 적용하는 것이 관심사 분리 원칙에 부합한다.
-  단, SecurityError의 context에는 근본적으로 PHI를 포함하지 않도록 호출부에서 주의해야 한다.
+
+---
+
+## Detailed API Specification
+
+### createParseResult(overrides?)
+
+팩토리 함수 시그니처 및 동작 명세:
+
+```javascript
+// 함수 시그니처
+export function createParseResult(overrides = {}) {...}
+
+// 기본 반환 객체
+{
+  metadata: null,       // Object | null - DICOM 메타데이터 (성공 시에만 할당)
+  voxelData: null,      // ArrayBuffer | null - 복셀 데이터 (성공 시에만 할당)
+  errors: [],           // ErrorResult[] - 파싱 오류/경고 목록
+  isValid: false,       // boolean - 파싱 성공 여부
+}
+
+// overrides 스프레드 병합 규칙
+return { ...defaults, ...overrides };
+```
+
+### ErrorResult 타입 구조
+
+```javascript
+/** @typedef {Object} ErrorResult */
+{
+  userMessage: string,   // 사용자에게 표시할 메시지 (FR-4.5 준수)
+  debugInfo: string,     // 개발자용 디버그 정보 (내부 구조 노출 금지)
+  errorCode: string,     // PARSE_ERR_* 에러 코드 (FR-5.1 준수)
+  severity: string,      // 'error' | 'warning' 심각도 등급
+}
+```
+
+### parseDICOM.js 호출 지점 매핑
+
+| # | 호출 위치 | 조건 | overrides | isValid | 추적 FR |
+|---|----------|------|-----------|---------|---------|
+| 1 | 파일 크기 초과 | file.size > 512MB | errors:[PARSE_ERR_FILE_TOO_LARGE] | false | FR-1.4 |
+| 2 | 매직 바이트 불일치 | !validateMagicByte() | errors:[PARSE_ERR_INVALID_MAGIC] | false | FR-1.1 |
+| 3 | 전송 구문 미지원 | !validateTransferSyntax() | errors:[PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX] | false | FR-1.2 |
+| 4 | 메타데이터 파싱 실패 | parseMetadata() throw | errors:[PARSE_ERR_MISSING_REQUIRED_TAG] | false | FR-1.3, FR-2.3 |
+| 5 | 필수 에러 존재 | severity==='error' | metadata, errors | false | FR-2.3 |
+| 6 | 픽셀 데이터 추출 실패 | parsePixelData() throw | metadata, errors | false | FR-1.5, FR-3.1 |
+| 7 | 정상 완료 | 전체 파이프라인 통과 | metadata, voxelData, errors, isValid=true | true | FR-1.1~1.5, FR-2.3, FR-3.1 |
+
 
 ---
 
 ## Complexity Tracking
 
-- **CT-01: 단일 파일 내 6개 클래스 정의**
-  - 복잡도: 낮음
-  - 정당성: 총 코드량 100~150줄 예상, 모든 클래스가 동일한 생성자 패턴을 공유하므로 인지 부하가 낮음.
-  에러 클래스 확장 시에만 파일 분리를 고려한다.
+- **CT-1: overrides 스프레드 병합의 타입 안전성**
+  JavaScript 환경에서 런타임 타입 검증이 없으므로, 잘못된 타입의 overrides가
+  전달될 위험이 있음. JSDoc @typedef와 IDE 타입 힌트로 컴파일 타임 경고를 제공하며,
+  팩토리 함수 내에서는 타입 검증을 수행하지 않는 대신 호출부(parseDICOM.js)에서
+  올바른 타입의 값을 전달하도록 설계. IEC 62304 Class A의 단순성 원칙에 부여함.
 
-- **CT-02: constants.js 의존성 방향**
-  - 복잡도: 낮음
-  - 정당성: CBVError.js는 constants.js의 ERROR_CODES를 읽기 전용으로 참조한다.
-  순환 의존성이 발생하지 않도록 constants.js는 CBVError.js를 import하지 않아야 한다.
-  [NEEDS CLARIFICATION: constants.js가 현재 CBVError.js를 import하고 있는지 확인 필요 - 순환 의존성 방지]
+- **CT-2: errors 배열 참조 독립성**
+  기본값 `errors: []`을 함수 본문 내에 정의하여 매 호출 시 새 배열 인스턴스를
+  생성함. 이전 호출의 errors 배열이后续 호출에 영향을 주는 공유 참조 문제를
+  원천 차단함. 팩토리 함수 패턴이 이 문제를 자연스럽게 해결함.
 
-- **CT-03: handleParseError.js 연동 시점**
-  - 복잡도: 보통
-  - 정당성: CBVError.js 자체는 handleParseError.js를 직접 호출하지 않는다.
-  handleParseError.js가 CBVError를 import하여 ErrorResult로 변환하는 단방향 의존성이다.
-  ErrorResult 변환 로직은 본 태스크 범위 외이나, 인터페이스 호환성은 Phase 4에서 검증한다.
 
-- **CT-04: IEC 62304 Class A 추적성 요구사항**
-  - 복잡도: 보통
-  - 정당성: 각 에러 클래스와 에러 코드를 SRS FR-xx 및 HAZ-xx와 매핑하여 양방향 추적성을 보장해야 한다.
-  추적성 매트릭스는 01_spec.md 4.4절에 정의되어 있으며, 단위 테스트에서 각 에러 코드의 존재 여부를 검증한다.
+---
+
+## Traceability Matrix (추적성 매트릭스)
+
+### 요구사항 -> 구현 매핑
+
+| 요구사항 ID | 요구사항 명칭 | ParseResult.js 매핑 | 검증 방법 |
+|------------|-------------|---------------------|----------|
+| FR-1.1 | DICOM 매직 바이트 검증 | isValid=false 반환 (호출 #2) | 단위 테스트 |
+| FR-1.2 | 전송 구문 검증 | isValid=false 반환 (호출 #3) | 단위 테스트 |
+| FR-1.3 | 필수 DICOM 태그 검증 | isValid=false 반환 (호출 #4) | 단위 테스트 |
+| FR-1.4 | 파일 크기 사전 검증 | isValid=false 반환 (호출 #1) | 단위 테스트 |
+| FR-1.5 | 픽셀 데이터 길이 검증 | errors에 warning 추가 (호출 #6~7) | 단위 테스트 |
+| FR-2.3 | 필수/선택 메타데이터 추출 | metadata 필드에 저장 | 통합 테스트 |
+| FR-3.1 | 복셀 데이터 타입 변환 | voxelData 필드에 저장 | 통합 테스트 |
+| FR-5.1 | 구조화된 에러 코드 | ErrorResult.errorCode 필드 | 단위 테스트 |
+| COMP-1 | DicomParser 인터페이스 | parseDICOM()->ParseResult 계약 | 통합 테스트 |
+
+### 컴포넌트 인터페이스 준수
+
+| 인터페이스 | 사양 | ParseResult.js 역할 | 준수 여부 |
+|-----------|------|---------------------|----------|
+| parseDICOM(file)->ParseResult | SAD COMP-1 | 반환 타입 정의 및 팩토리 제공 | 준수 |
+| renderSlice(viewport,data,idx) | SAD COMP-4 | voxelData 전달 구조 보장 | 준수 |
+| handleError(code)->UserMessage | SAD COMP-7 | ErrorResult.userMessage 필드 제공 | 준수 |
+
+
+---
+
+## Test Strategy
+
+### 단위 테스트 (ParseResult.test.js)
+
+| 테스트 케이스 | 설명 | 기대 결과 |
+|--------------|------|----------|
+| 기본값 생성 | createParseResult() 인자 없이 호출 | {metadata:null, voxelData:null, errors:[], isValid:false} |
+| 부분 overrides | {isValid:true} 만 전달 | isValid=true, 나머지 기본값 유지 |
+| 전체 overrides | 모든 필드 전달 | 전달한 값으로 덮어쓰기 |
+| errors 배열 독립성 | 두 번 호출 후 한쪽 errors 수정 | 다른 쪽 errors 영향 없음 |
+| null metadata | {metadata:null} 전달 | metadata 필드 null 유지 |
+| 빈 errors | {errors:[]} 전달 | 빈 배열 (기본값과 동일) |
+| ErrorResult 구조 | errors에 ErrorResult 객체 추가 | userMessage, debugInfo, errorCode, severity 모두 유지 |
+
+### 통합 테스트 (parseDICOM.test.js 연동)
+
+| 테스트 케이스 | 설명 | 검증 항목 |
+|--------------|------|----------|
+| 정상 파일 파싱 | 유효한 DICOM 파일 | isValid=true, metadata!=null, voxelData!=null |
+| 매직 바이트 오류 | 비-DICOM 파일 | isValid=false, errors[0].errorCode='PARSE_ERR_INVALID_MAGIC' |
+| 파일 크기 초과 | 512MB+ 파일 | isValid=false, errors[0].errorCode='PARSE_ERR_FILE_TOO_LARGE' |
+| 전송 구문 미지원 | 압축 DICOM | isValid=false, errors[0].errorCode='PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX' |
+
+
+---
+
+## Risk Assessment
+
+| 위험 요소 | 확률 | 영향도 | 완화 대책 |
+|----------|------|-------|----------|
+| overrides에 잘못된 타입 전달 | 낮음 | 중간 | JSDoc 타입 힌트 + 코드 리뷰 |
+| errors 배열 공유 참조 문제 | 없음 | 높음 | 팩토리 함수 내 기본값 선언으로 자연 해결 |
+| 새로운 필드 추가 요구 | 중간 | 낮음 | spread 패턴으로 확장 용이 |
+| parseDICOM.js 리팩토링 시 호출부 불일치 | 낮음 | 높음 | 7개 호출 지점 문서화 및 테스트 커버리지 |
+
 
 ---
 
 ## References
 
 - Spec: `docs/spec-kit/01_spec.md`
-- 티켓: `PLAYG-1819`
-- 관련 문서:
-  - `docs/artifacts/SRS.md` (소프트웨어 요구사항 명세서, PLAYG-1460)
-  - `docs/artifacts/SAD.md` (소프트웨어 아키텍처 설계, PLAYG-1766)
-  - `docs/artifacts/SystemRequirement.md` (시스템 요구사항)
-- 구현 대상 파일: `viewer/src/errors/CBVError.js`
-- 연동 모듈:
-  - `viewer/src/errors/handleParseError.js` (에러 변환 핸들러)
-  - `viewer/src/constants/constants.js` (에러 코드 정의)
-  - `viewer/src/parsers/ParseResult.js` (파싱 결과 타입)
-  - `viewer/src/parsers/parseDICOM.js` (DICOM 파싱 파이프라인)
-  - `viewer/src/parsers/pixelDataParser.js` (픽셀 데이터 파서)
-  - `viewer/src/parsers/metadataParser.js` (메타데이터 파서)
+- 티켓: `PLAYG-1818`
+- 소스: `viewer/src/types/ParseResult.js`
+- 호출부: `viewer/src/data/dicomParser/parseDICOM.js`
+- 관련 문서: `docs/artifacts/SRS.md`, `docs/artifacts/SAD.md`
+- 표준: IEC 62304:2006+A1:2015, DICOM PS3.5, DICOM PS3.10
