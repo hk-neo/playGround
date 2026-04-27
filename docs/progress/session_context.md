@@ -1,66 +1,81 @@
-# Session Context: PLAYG-1817
+# Session Context
 
-**티켓**: PLAYG-1817 | **타입**: Detailed Design (SDS-1.2)
-**요약**: DICOMMetadata typedef 27개 속성 정의 + createDICOMMetadata() 팩토리 함수
-**최종 갱신**: 2026-04-27 (!implement 완료)
+**마지막 갱신**: 2026-04-27 13:03 | **티켓**: PLAYG-1819 | **유형**: Detailed Design - SDS-2.1
 
 ---
 
-### 1. 시스템 아키텍처/컨벤션 (유실 절대 금지)
+### 1. 시스템 아키텍처 / 컨벤션
 
-#### 프로젝트 구조
+#### 프로젝트 개요
+- **프로젝트명**: DentiView3D - 웹 기반 CBCT 영상 뷰어
+- **안전 등급**: IEC 62304 Class A
+- **언어/런타임**: JavaScript ES6+, ECMAScript 2020 호환
+- **테스트**: Vitest 단위 테스트, ESLint 9 (설정 파일 미구성)
+- **대상 플랫폼**: 웹 브라우저 - Chrome, Firefox, Edge 최신 2버전
+
+#### 에러 클래스 계층 구조 (구현 완료)
+```
+Error
+  +-- CBVError                    기본 클래스 (code=CBV_000)
+        +-- ParseError            파싱 오류 (기본코드=PARSE_ERR_UNEXPECTED), FR-ERR-02
+        +-- ValidationError       검증 오류 (기본코드=VALIDATE_001), FR-ERR-03
+        +-- RenderError           렌더링 오류 (기본코드=RENDER_001), FR-ERR-04
+        +-- SecurityError         보안 위반 (기본코드=SECURITY_001, PHI 필터링), FR-ERR-05
+        +-- MemoryError           메모리 한계 (기본코드=MEMORY_001), FR-ERR-06
+```
+
+#### 파일 구조 (현재 상태)
 ```
 viewer/src/
-  types/
-    DICOMMetadata.js    # [구현 완료] DICOMMetadata typedef + createDICOMMetadata 팩토리
-    ParseResult.js      # ParseResult typedef + createParseResult 팩토리 (기존)
+  errors/
+    CBVError.js            # CBVError + 5개 하위 클래스 ✅ 구현 완료
+    handleParseError.js    # CBVError -> ErrorResult 변환 핸들러 ✅ 구현 완료
   data/dicomParser/
-    metadataParser.js / phiGuard.js / ParseContext.js / constants.js
-    tagReader.js / metaGroupParser.js / index.js / parseDICOM.js
-    pixelDataParser.js / handleParseError.js
-    validateMagicByte.js / validateTransferSyntax.js
-  data/dicomDictionary.js
-  errors/CBVError.js
-  main.js
+    constants.js           # ERROR_CODES (12종) + ERROR_MESSAGES ✅ 확장 완료
+  types/
+    ParseResult.js         # 결과 타입 OkResult / ErrorResult (기존)
+    DICOMMetadata.js       # DICOM 메타데이터 팩토리 (기존)
+
 viewer/tests/
-  setup.js / unit.test.js
+  unit/errors/
+    CBVError.test.js       # 23개 단위 테스트 ✅
+    Integration.test.js    # 11개 통합 테스트 ✅
+  unit.test.js             # 기존 21개 테스트
 ```
 
-#### 기술 스택 & 제약사항
-- **언어**: JavaScript ES2020+, ESM (import/export)
-- **테스트**: Vitest 3.x (viewer/tests/)
-- **빌드**: Vite 5.x
-- **표준**: IEC 62304 Class A -- class/TypeScript 금지, plain object + JSDoc typedef만 사용
-- **DICOM 준수**: PS3.5 VR 매핑, PS3.10 파일 메타 정보 그룹(0002) 태그
-- **런타임 외부 의존성**: 0개
+#### 핵심 설계 결정
+- ParseError 기본 코드: `PARSE_ERR_UNEXPECTED` (catch-all 동작)
+- SecurityError: 생성자에서 `sanitizeContext()`로 PHI 필드 자동 제거
+- handleParseError.js: ERROR_MESSAGES[ko]를 userMessage로 사용, debugInfo는 개발환경에서만 생성
+- 단일 파일(CBVError.js)에 6개 클래스 정의, 명명된 export 사용
 
-#### 아키텍처 결정 사항 (ADR)
-- **ADR-1**: Plain Object + JSDoc typedef (class/TypeScript 배제)
-- **ADR-2**: Factory Pattern + Object Spread
-- **ADR-3**: 배열 기본값 인라인 리터럴 생성 (HAZ-5.1 참조 오염 방지)
-- **ADR-4**: 팩토리 내부 유효성 검증 없음 (SRP)
-- **ADR-5**: PHI 보호 로직 미포함 (마스킹은 phiGuard.js 담당)
+---
 
-#### 레이어 분리 (단방향 의존)
-- types/ 레이어 -> 순수 데이터 타입 (DICOMMetadata.js, ParseResult.js)
-- data/dicomParser/ 레이어 -> 파싱 로직 + PHI 보호
-- 의존성 방향: data 레이어 -> types 레이어 (역방향 없음)
+### 2. 해결 완료된 주요 이슈 및 트러블슈팅
 
-### 2. !implement 완료 내역
+#### PLAYG-1819: CBVError 에러 클래스 계층 구현 완료
+- **산출물**: 
+  - CBVError.js: 6개 에러 클래스 (CBVError + ParseError + ValidationError + RenderError + SecurityError + MemoryError)
+  - handleParseError.js: ErrorResult 변환 핸들러
+  - constants.js: 12개 에러 코드 + ERROR_MESSAGES 확장
+  - CBVError.test.js: 23개 단위 테스트 (T-01~T-23)
+  - Integration.test.js: 11개 통합 테스트 (SC-8, SC-9, SC-11)
+- **테스트 결과**: 전체 55개 테스트 통과, CBVError.js 100% 커버리지
+- **Jira 댓글**: comment_id=12061 게시 완료
 
-#### 수정 파일
-- **viewer/src/types/DICOMMetadata.js**: JSDoc typedef 보완 (PHI 필드 주석, 필수 태그 주석, DICOM Tag 명시) + null/undefined 방어 코드 (overrides ?? {})
-- **viewer/tests/unit.test.js**: TC-1.2.1~TC-1.2.6 + EC-001~EC-004 테스트 10개 추가 (기존 2개 교체 포함), expectDefaultValues 헬퍼 함수 추가
-- **docs/spec-kit/03_tasks.md**: 전체 18개 태스크 완료 표시
+#### 해결된 이슈
+1. ParseError 기본 코드 불일치: 기존 PARSE_001 → 명세 요구 PARSE_ERR_UNEXPECTED로 수정
+2. constants.js 누락 코드: CBV_000, VALIDATE_001, RENDER_001, SECURITY_001, MEMORY_001 및 ERROR_MESSAGES 추가
+3. handleParseError.js 미구현: 명세 FR-ERR-07에 맞게 신규 생성
+4. 테스트 import 경로: tests/unit/errors/ → ../../../src/ (3단계 상위)
 
-#### 테스트 결과
-- 전체 29개 테스트 PASS
-- DICOMMetadata.js 커버리지 100% (Stmts/Branch/Funcs/Lines)
-- Vite 프로덕션 빌드 성공
-
-#### 트러블슈팅
-- 명세서에 28개 속성으로 기재되었으나 실제 정의는 27개 (문자열 12 + 숫자 12 + 배열 3 = 27). 테스트 기대값을 27로 수정.
+---
 
 ### 3. 미완료 / Next Steps
-- **[NEEDS CLARIFICATION]** photometricInterpretation, samplesPerPixel 등 추가 필드를 DICOMMetadata typedef에 공식 포함할지 여부 -> metadataParser 리팩토링 시 결정 필요
-- **[검증 완료]** constants.js METADATA_TAGS required=true 태그(rows, columns, bitsAllocated, pixelRepresentation)와 DICOMMetadata 기본값 일치성 확인 완료
+
+#### 후속 작업 (별도 티켓 필요)
+- parseDICOM.js 파이프라인에서 ParseError 실제 발생 연동
+- pixelDataParser.js, metadataParser.js에서 ParseError 사용
+- ESLint 설정 파일(eslint.config.js) 생성 후 정적 분석 수행
+- ErrorResult.userMessage에 PHI 정보 노출 방지 정규식 강화
+- 향후 에러 클래스 10개 이상 확장 시 파일 분리 검토

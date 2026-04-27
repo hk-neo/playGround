@@ -84,7 +84,8 @@ export const PIXEL_DATA_TAG = Object.freeze({ group: 0x7FE0, element: 0x0010 });
  * @constant {ReadonlyObject}
  * @trace FR-5.1, FR-CST-10, HAZ-1.1~HAZ-1.4, HAZ-5.2
  */
-export const ERROR_CODES = Object.freeze({
+export const ERROR_CODES = {
+  CBV_000: 'CBV_000',
   PARSE_ERR_INVALID_MAGIC: 'PARSE_ERR_INVALID_MAGIC',
   PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX: 'PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX',
   PARSE_ERR_MISSING_REQUIRED_TAG: 'PARSE_ERR_MISSING_REQUIRED_TAG',
@@ -92,11 +93,11 @@ export const ERROR_CODES = Object.freeze({
   PARSE_ERR_FILE_READ: 'PARSE_ERR_FILE_READ',
   PARSE_ERR_FILE_TOO_LARGE: 'PARSE_ERR_FILE_TOO_LARGE',
   PARSE_ERR_UNEXPECTED: 'PARSE_ERR_UNEXPECTED',
-});
-
-// ============================================================
-// Phase 3.4: 하위 호환 별칭 및 개별 export
-// ============================================================
+  VALIDATE_001: 'VALIDATE_001',
+  RENDER_001: 'RENDER_001',
+  SECURITY_001: 'SECURITY_001',
+  MEMORY_001: 'MEMORY_001',
+};
 
 /**
  * 하위 호환용 ERROR_CODES 별칭
@@ -157,11 +158,32 @@ export const ERROR_MESSAGES = Object.freeze({
     en: 'Unexpected error occurred.',
     severity: 'error',
   },
-});
-
-// ============================================================
-// Phase 3.3: 메타데이터 태그 사전 (METADATA_TAGS)
-// ============================================================
+  CBV_000: {
+    ko: '알 수 없는 오류가 발생했습니다.',
+    en: 'An unknown error occurred.',
+    severity: 'error',
+  },
+  VALIDATE_001: {
+    ko: '데이터 검증에 실패했습니다.',
+    en: 'Data validation failed.',
+    severity: 'error',
+  },
+  RENDER_001: {
+    ko: '렌더링에 실패했습니다.',
+    en: 'Rendering failed.',
+    severity: 'error',
+  },
+  SECURITY_001: {
+    ko: '보안 정책 위반이 감지되었습니다.',
+    en: 'Security policy violation detected.',
+    severity: 'error',
+  },
+  MEMORY_001: {
+    ko: '메모리가 부족합니다.',
+    en: 'Insufficient memory.',
+    severity: 'error',
+  },
+};
 
 /**
  * 필수/선택 메타데이터 태그 사전
