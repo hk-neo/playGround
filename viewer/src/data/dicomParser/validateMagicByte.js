@@ -6,8 +6,7 @@
  * US-1: TC-1.1~TC-1.4, SDS-3.2
  */
 
-import { MAGIC_BYTE_OFFSET, DICOM_MAGIC_BYTE } from './constants.js';
-import { MAGIC_TABLE, MAGIC_BYTE_ERRORS, GENERIC_MAGIC_MIN_SIZE } from './constants.js';
+import { MAGIC_BYTE_OFFSET, DICOM_MAGIC_BYTE, MAGIC_TABLE, MAGIC_BYTE_ERRORS, GENERIC_MAGIC_MIN_SIZE } from './constants.js';
 
 /**
  * DICOM Part 10 파일의 매직 바이트(DICM)를 검증한다.
@@ -78,9 +77,8 @@ export function validateGenericMagicByte(buffer) {
 
   // 3. 오프셋 0x00에서 최대 4바이트 읽기
   const view = new DataView(buffer);
-  const headerLen = 4;
-  const header = new Uint8Array(headerLen);
-  for (let i = 0; i < headerLen; i++) {
+  const header = new Uint8Array(GENERIC_MAGIC_MIN_SIZE);
+  for (let i = 0; i < GENERIC_MAGIC_MIN_SIZE; i++) {
     header[i] = view.getUint8(i);
   }
 
