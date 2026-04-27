@@ -14,7 +14,7 @@
 ## Phase 1: Setup (공통 인프라)
 <!-- 모든 다음 단계에 필요한 공통 환경 설정 -->
 
-- [ ] **T001** 🔒 기존 구현 상태 분석 및 명세 일치성 검증
+- [x] **T001** 🔒 기존 구현 상태 분석 및 명세 일치성 검증
   - 파일: `viewer/src/types/DICOMMetadata.js`
   - 작업 내용:
     - 기존 DICOMMetadata.js의 28개 속성 JSDoc typedef가 FR-001에 명시된 속성 목록과 정확히 일치하는지 교차 검증
@@ -26,7 +26,7 @@
     - 28개 속성 이름, 타입, 기본값이 모두 01_spec.md FR-001/FR-004와 일치함을 확인
     - 불일치 항목이 있으면 목록화하여 Phase 2에서 수정 가능하도록 정리
 
-- [ ] **T002** 🔒 Vitest 테스트 환경 확인 및 테스트 파일 준비
+- [x] **T002** 🔒 Vitest 테스트 환경 확인 및 테스트 파일 준비
   - 파일: `viewer/tests/unit.test.js`, `viewer/package.json`
   - 작업 내용:
     - `vitest`가 package.json devDependencies에 포함되어 있는지 확인
@@ -42,7 +42,7 @@
 ## Phase 2: Foundational (선행 필수 항목)
 <!-- CRITICAL: 사용자 스토리 구현 전 반드시 완료해야 할 핵심 인프라 -->
 
-- [ ] **T003** 🔒 DICOMMetadata typedef JSDoc 보완 및 검증
+- [x] **T003** 🔒 DICOMMetadata typedef JSDoc 보완 및 검증
   - 파일: `viewer/src/types/DICOMMetadata.js`
   - 작업 내용:
     - T001 분석 결과를 바탕으로 28개 속성 JSDoc @property 선언 보완
@@ -55,7 +55,7 @@
     - PHI 필드 3개에 보안 관련 주석 포함
     - `npm run lint` 통과 (린트 에러 없음)
 
-- [ ] **T004** 🔒 createDICOMMetadata 팩토리 함수 방어 코드 추가
+- [x] **T004** 🔒 createDICOMMetadata 팩토리 함수 방어 코드 추가
   - 파일: `viewer/src/types/DICOMMetadata.js`
   - 작업 내용:
     - EC-001 대응: `overrides = {}` 기본값 파라미터에 추가로 `overrides ?? {}` nullish coalescing 방어 로직 적용
@@ -75,7 +75,7 @@
 - **Independent Test**: 무인자 호출 후 반환 객체의 28개 속성 값을 기대값과 비교
 - **추적**: FR-001, FR-004, FR-2.3, TC-1.2.1
 
-- [ ] **T005** 🔀 [US1] 28개 속성 기본값 검증 테스트 작성 (TC-1.2.1)
+- [x] **T005** 🔀 [US1] 28개 속성 기본값 검증 테스트 작성 (TC-1.2.1)
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - 기존 `createDICOMMetadata` describe 블록에 TC-1.2.1 테스트 추가
@@ -86,7 +86,7 @@
     - `it('TC-1.2.1: 무인자 호출 시 28개 속성이 모두 기본값으로 채워진 객체를 반환한다', ...)` 테스트 PASS
     - 28개 속성 전부 기본값 검증 완료
 
-- [ ] **T006** 🔀 [US1] 필수 필드 기본값 검증 테스트 작성 (TC-1.2.5)
+- [x] **T006** 🔀 [US1] 필수 필드 기본값 검증 테스트 작성 (TC-1.2.5)
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - TC-1.2.5: rows=0, columns=0, bitsAllocated=16, pixelRepresentation=0 검증
@@ -96,7 +96,7 @@
     - `it('TC-1.2.5: 필수 필드(rows,columns,bitsAllocated,pixelRepresentation) 기본값을 검증한다', ...)` 테스트 PASS
     - 필수 4개 필드 기본값이 명세와 정확히 일치
 
-- [ ] **T007** 🔒 [US1] US1 관련 단위 테스트 통합 실행 및 검증
+- [x] **T007** 🔒 [US1] US1 관련 단위 테스트 통합 실행 및 검증
   - 파일: `viewer/tests/unit.test.js`
   - 완료 조건: TC-1.2.1, TC-1.2.5 테스트 모두 PASS, 기존 테스트 회귀 없음
 
@@ -108,7 +108,7 @@
 - **Independent Test**: 특정 속성을 override로 전달 후 반영 여부 확인
 - **추적**: FR-002, FR-2.3, TC-1.2.2, TC-1.2.3
 
-- [ ] **T008** 🔀 [US2] overrides 지정값 반영 테스트 작성 (TC-1.2.2)
+- [x] **T008** 🔀 [US2] overrides 지정값 반영 테스트 작성 (TC-1.2.2)
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - TC-1.2.2: `createDICOMMetadata({rows:512, columns:512})` 호출 시 지정값 반영 + 나머지 기본값 유지 검증
@@ -117,7 +117,7 @@
   - 완료 조건:
     - `it('TC-1.2.2: overrides 전달 시 지정값은 반영되고 나머지는 기본값이 유지된다', ...)` 테스트 PASS
 
-- [ ] **T009** 🔀 [US2] 배열 필드 override 정확성 테스트 작성 (TC-1.2.3)
+- [x] **T009** 🔀 [US2] 배열 필드 override 정확성 테스트 작성 (TC-1.2.3)
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - TC-1.2.3: `createDICOMMetadata({pixelSpacing:[0.3,0.3]})` 호출 시 배열 값이 정확히 반영됨을 검증
@@ -126,7 +126,7 @@
   - 완료 조건:
     - `it('TC-1.2.3: 배열 필드(pixelSpacing 등) override가 정확히 반영된다', ...)` 테스트 PASS
 
-- [ ] **T010** 🔒 [US2] US2 관련 단위 테스트 통합 실행 및 검증
+- [x] **T010** 🔒 [US2] US2 관련 단위 테스트 통합 실행 및 검증
   - 파일: `viewer/tests/unit.test.js`
   - 완료 조건: TC-1.2.2, TC-1.2.3 테스트 모두 PASS, 기존 테스트 회귀 없음
 
@@ -138,7 +138,7 @@
 - **Independent Test**: 두 번 호출하여 반환된 객체가 서로 다른 참조인지 확인
 - **추적**: FR-003, HAZ-5.1, TC-1.2.4
 
-- [ ] **T011** 🔀 [US3] 참조 독립성 및 참조 오염 방지 테스트 작성 (TC-1.2.4)
+- [x] **T011** 🔀 [US3] 참조 독립성 및 참조 오염 방지 테스트 작성 (TC-1.2.4)
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - TC-1.2.4: 연속 두 번 호출 시 반환 객체가 서로 다른 참조(`not.toBe(meta1)`)임을 검증
@@ -149,7 +149,7 @@
     - `it('TC-1.2.4: 연속 호출 시 서로 다른 참조를 반환하여 참조 오염을 방지한다', ...)` 테스트 PASS
     - 스칼라 및 배열 속성 모두 참조 독립성 확인
 
-- [ ] **T012** 🔀 [US3] 엣지 케이스 테스트 작성 (EC-001 ~ EC-004)
+- [x] **T012** 🔀 [US3] 엣지 케이스 테스트 작성 (EC-001 ~ EC-004)
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - EC-001: `createDICOMMetadata(null)` 및 `createDICOMMetadata(undefined)` 호출 시 에러 없이 기본값 객체 반환 검증
@@ -159,7 +159,7 @@
   - 완료 조건:
     - EC-001 ~ EC-004 4개 엣지 케이스 테스트 모두 PASS
 
-- [ ] **T013** 🔒 [US3] US3 관련 단위 테스트 통합 실행 및 검증
+- [x] **T013** 🔒 [US3] US3 관련 단위 테스트 통합 실행 및 검증
   - 파일: `viewer/tests/unit.test.js`
   - 완료 조건: TC-1.2.4, EC-001 ~ EC-004 테스트 모두 PASS, 기존 테스트 회귀 없음
 
@@ -171,7 +171,7 @@
 - **Independent Test**: 반환 객체에 PHI 필드 3개가 빈 문자열 기본값으로 존재하는지 확인
 - **추적**: FR-005, FR-4.1, HAZ-3.1, TC-1.2.6
 
-- [ ] **T014** 🔀 [US4] PHI 필드 기본값 검증 테스트 작성 (TC-1.2.6)
+- [x] **T014** 🔀 [US4] PHI 필드 기본값 검증 테스트 작성 (TC-1.2.6)
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - TC-1.2.6: 무인자 호출 시 patientName, patientID, patientBirthDate가 빈 문자열로 존재하는지 검증
@@ -182,7 +182,7 @@
     - `it('TC-1.2.6: PHI 대상 필드 3개가 빈 문자열 기본값으로 존재한다', ...)` 테스트 PASS
     - PHI 필드 override 시에도 정상 동작 확인
 
-- [ ] **T015** 🔒 [US4] US4 관련 단위 테스트 통합 실행 및 검증
+- [x] **T015** 🔒 [US4] US4 관련 단위 테스트 통합 실행 및 검증
   - 파일: `viewer/tests/unit.test.js`
   - 완료 조건: TC-1.2.6 테스트 PASS, 기존 테스트 회귀 없음
 
@@ -194,7 +194,7 @@
 - **Independent Test**: 무인자 호출 시 필수 필드 기본값 검증 (TC-1.2.5와 연동)
 - **추적**: FR-006, FR-1.3, HAZ-1.3
 
-- [ ] **T016** 🔀 [US5] 필수 태그 기본값이 metadataParser 검증 기준과 일치하는지 확인
+- [x] **T016** 🔀 [US5] 필수 태그 기본값이 metadataParser 검증 기준과 일치하는지 확인
   - 파일: `viewer/src/types/DICOMMetadata.js`, `viewer/src/data/dicomParser/constants.js`
   - 작업 내용:
     - constants.js의 METADATA_TAGS에서 required=true로 표시된 태그(rows, columns, bitsAllocated, pixelRepresentation) 확인
@@ -208,7 +208,7 @@
 
 ## Phase 8: Integration & Finalization
 
-- [ ] **T-INT-01** 🔒 통합 테스트 실행 및 전체 검증
+- [x] **T-INT-01** 🔒 통합 테스트 실행 및 전체 검증
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - `npx vitest run` 전체 테스트 스위트 실행 (기존 + 신규 TC-1.2.1 ~ TC-1.2.6 + EC-001 ~ EC-004)
@@ -220,7 +220,7 @@
     - DICOMMetadata.js 함수 커버리지 100%
     - metadataParser.js, phiGuard.js 연동 동작 정상
 
-- [ ] **T-INT-02** 🔒 최종 코드 리뷰 및 문서 정리
+- [x] **T-INT-02** 🔒 최종 코드 리뷰 및 문서 정리
   - 파일: `viewer/src/types/DICOMMetadata.js`, `viewer/tests/unit.test.js`, `docs/spec-kit/03_tasks.md`
   - 작업 내용:
     - DICOMMetadata.js 최종 코드 리뷰: JSDoc 완전성, PHI 필드 주석, 방어 코드, 외부 의존성 0개 확인
