@@ -14,7 +14,7 @@
 ## Phase 1: Setup (공통 인프라)
 <!-- 모든 다음 단계에 필요한 공통 환경 설정 -->
 
-- [ ] **T001** 🔒 프로젝트 디렉토리 구조 확인 및 테스트 환경 검증
+- [x] **T001** 🔒 프로젝트 디렉토리 구조 확인 및 테스트 환경 검증
   - 파일: `viewer/src/errors/`, `viewer/tests/unit/errors/`, `viewer/src/constants/constants.js`
   - 작업 내용:
     1. `viewer/src/errors/` 디렉토리 존재 확인, 없으면 생성
@@ -31,7 +31,7 @@
     - constants.js의 ERROR_CODES에 CBV_000 포함 12개 에러 코드가 모두 정의되어 있음
     - `npx jest --version` 명령이 정상 실행됨
 
-- [ ] **T002** 🔒 CBVError 기본 클래스 구현
+- [x] **T002** 🔒 CBVError 기본 클래스 구현
   - 파일: `viewer/src/errors/CBVError.js`
   - 관련 명세: FR-ERR-01, US-11
   - 작업 내용:
@@ -53,7 +53,7 @@
 ## Phase 2: Foundational (선행 필수 항목)
 <!-- ⚠️ CRITICAL: 사용자 스토리 구현 전 반드시 완료해야 할 핵심 인프라 -->
 
-- [ ] **T003** 🔒 ParseError 하위 클래스 구현
+- [x] **T003** 🔒 ParseError 하위 클래스 구현
   - 파일: `viewer/src/errors/CBVError.js`
   - 관련 명세: FR-ERR-02, US-1, US-2, US-3, US-4, US-5, US-6, US-12
   - 작업 내용:
@@ -70,7 +70,7 @@
     - `error instanceof Error === true`
     - 7종 파싱 에러 코드로 생성 시 정상 동작함
 
-- [ ] **T004** 🔀 ValidationError, RenderError 하위 클래스 구현
+- [x] **T004** 🔀 ValidationError, RenderError 하위 클래스 구현
   - 파일: `viewer/src/errors/CBVError.js`
   - 관련 명세: FR-ERR-03, FR-ERR-04, US-7, US-8
   - 작업 내용:
@@ -88,7 +88,7 @@
     - `new RenderError('test')` 생성 시 name/code/instanceof 확인
     - 두 클래스 모두 instanceof CBVError, instanceof Error === true
 
-- [ ] **T005** 🔀 SecurityError, MemoryError 하위 클래스 구현
+- [x] **T005** 🔀 SecurityError, MemoryError 하위 클래스 구현
   - 파일: `viewer/src/errors/CBVError.js`
   - 관련 명세: FR-ERR-05, FR-ERR-06, US-9, US-10
   - 작업 내용:
@@ -117,7 +117,7 @@
 - **Goal**: CBVError 기본 클래스와 ParseError 하위 클래스가 모든 파싱 에러 코드(7종)에 대해 정상 동작하는지 단위 테스트로 검증한다.
 - **Independent Test**: `npx jest viewer/tests/unit/errors/CBVError.test.js --testPathPattern='CBVError|ParseError'`
 
-- [ ] **T006** 🔒 [US-11, US-12] CBVError 기본 클래스 단위 테스트 작성
+- [x] **T006** 🔒 [US-11, US-12] CBVError 기본 클래스 단위 테스트 작성
   - 파일: `viewer/tests/unit/errors/CBVError.test.js`
   - 관련 명세: FR-ERR-01, US-11, US-12
   - 테스트 항목 (Plan 테스트 ID 매핑):
@@ -130,7 +130,7 @@
     - 3개 테스트 케이스가 모두 PASS
     - describe('CBVError') 그룹 내에 체계적으로 정리됨
 
-- [ ] **T007** 🔒 [US-1~US-6, US-12] ParseError 단위 테스트 작성
+- [x] **T007** 🔒 [US-1~US-6, US-12] ParseError 단위 테스트 작성
   - 파일: `viewer/tests/unit/errors/CBVError.test.js`
   - 관련 명세: FR-ERR-02, US-1~US-6, US-12
   - 테스트 항목 (Plan 테스트 ID 매핑):
@@ -154,7 +154,7 @@
 - **Goal**: 4개 하위 클래스(ValidationError, RenderError, SecurityError, MemoryError)가 명세대로 동작하는지 단위 테스트로 검증한다.
 - **Independent Test**: `npx jest viewer/tests/unit/errors/CBVError.test.js --testPathPattern='ValidationError|RenderError|SecurityError|MemoryError'`
 
-- [ ] **T008** 🔀 [US-7, US-8] ValidationError, RenderError 단위 테스트 작성
+- [x] **T008** 🔀 [US-7, US-8] ValidationError, RenderError 단위 테스트 작성
   - 파일: `viewer/tests/unit/errors/CBVError.test.js`
   - 관련 명세: FR-ERR-03, FR-ERR-04, US-7, US-8
   - 테스트 항목:
@@ -168,7 +168,7 @@
     - 4개 테스트 케이스가 모두 PASS
     - context에 검증/렌더링 관련 메타데이터 전달 시 정상 동작 확인
 
-- [ ] **T009** 🔀 [US-9, US-10] SecurityError, MemoryError 단위 테스트 작성
+- [x] **T009** 🔀 [US-9, US-10] SecurityError, MemoryError 단위 테스트 작성
   - 파일: `viewer/tests/unit/errors/CBVError.test.js`
   - 관련 명세: FR-ERR-05, FR-ERR-06, US-9, US-10
   - 테스트 항목:
@@ -183,7 +183,7 @@
     - 5개 테스트 케이스가 모두 PASS
     - SecurityError에 PHI 필드(patientName, patientId, birthDate) 전달 시 필드 제거됨
 
-- [ ] **T010** 🔒 [US-9] 보안 검증 단위 테스트 작성 (PHI 미포함, 에러 코드 일치)
+- [x] **T010** 🔒 [US-9] 보안 검증 단위 테스트 작성 (PHI 미포함, 에러 코드 일치)
   - 파일: `viewer/tests/unit/errors/CBVError.test.js`
   - 관련 명세: NFR-ERR-02, NFR-ERR-03, US-9
   - 테스트 항목:
@@ -204,7 +204,7 @@
 
 ## Phase 5: Integration & Finalization
 
-- [ ] **T-INT-01** 🔒 handleParseError.js 연동 및 ErrorResult 변환 검증
+- [x] **T-INT-01** 🔒 handleParseError.js 연동 및 ErrorResult 변환 검증
   - 파일: `viewer/src/errors/handleParseError.js`, `viewer/src/parsers/ParseResult.js`
   - 관련 명세: FR-ERR-07, SC-8, SC-9, SC-11
   - 작업 내용:
@@ -219,7 +219,7 @@
     - ErrorResult.userMessage에 offset, tag, buffer 등 내부 식별자 미포함
     - 통합 테스트 전체 PASS
 
-- [ ] **T-INT-02** 🔒 정적 분석, 최종 검증 및 문서 정리
+- [x] **T-INT-02** 🔒 정적 분석, 최종 검증 및 문서 정리
   - 파일: `viewer/src/errors/CBVError.js`, `viewer/tests/unit/errors/CBVError.test.js`
   - 관련 명세: SC-13, SC-14, SC-15, SC-16
   - 작업 내용:

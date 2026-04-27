@@ -64,6 +64,7 @@ export const PIXEL_DATA_TAG = { group: 0x7FE0, element: 0x0010 };
  * @constant {Object}
  */
 export const ERROR_CODES = {
+  CBV_000: 'CBV_000',
   PARSE_ERR_INVALID_MAGIC: 'PARSE_ERR_INVALID_MAGIC',
   PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX: 'PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX',
   PARSE_ERR_MISSING_REQUIRED_TAG: 'PARSE_ERR_MISSING_REQUIRED_TAG',
@@ -71,6 +72,10 @@ export const ERROR_CODES = {
   PARSE_ERR_FILE_READ: 'PARSE_ERR_FILE_READ',
   PARSE_ERR_FILE_TOO_LARGE: 'PARSE_ERR_FILE_TOO_LARGE',
   PARSE_ERR_UNEXPECTED: 'PARSE_ERR_UNEXPECTED',
+  VALIDATE_001: 'VALIDATE_001',
+  RENDER_001: 'RENDER_001',
+  SECURITY_001: 'SECURITY_001',
+  MEMORY_001: 'MEMORY_001',
 };
 
 /**
@@ -122,6 +127,31 @@ export const ERROR_MESSAGES = {
   PARSE_ERR_UNEXPECTED: {
     ko: '예기치 않은 오류가 발생했습니다.',
     en: 'Unexpected error occurred.',
+    severity: 'error',
+  },
+  CBV_000: {
+    ko: '알 수 없는 오류가 발생했습니다.',
+    en: 'An unknown error occurred.',
+    severity: 'error',
+  },
+  VALIDATE_001: {
+    ko: '데이터 검증에 실패했습니다.',
+    en: 'Data validation failed.',
+    severity: 'error',
+  },
+  RENDER_001: {
+    ko: '렌더링에 실패했습니다.',
+    en: 'Rendering failed.',
+    severity: 'error',
+  },
+  SECURITY_001: {
+    ko: '보안 정책 위반이 감지되었습니다.',
+    en: 'Security policy violation detected.',
+    severity: 'error',
+  },
+  MEMORY_001: {
+    ko: '메모리가 부족합니다.',
+    en: 'Insufficient memory.',
     severity: 'error',
   },
 };
