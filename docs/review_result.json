@@ -1,0 +1,28 @@
+{
+  "status": "PASS",
+  "critical_count": 0,
+  "high_count": 0,
+  "issues": [
+    {
+      "id": "CQ-1",
+      "severity": "MEDIUM",
+      "description": "expectDefaultValues 헬퍼 함수 JSDoc에 '28개 속성'으로 기재되어 있으나 실제는 27개 속성 검증. TC-1.2.1 테스트 설명에도 '28개 속성'으로 표기됨. 주석-구현 불일치.",
+      "location": "viewer/tests/unit.test.js L169 (expectDefaultValues JSDoc), L187 (TC-1.2.1 설명)",
+      "fixed": false
+    },
+    {
+      "id": "CQ-2",
+      "severity": "MEDIUM",
+      "description": "ParseResult.js(createParseResult)에 null/undefined 방어 로직(overrides ?? {})이 누락됨. DICOMMetadata.js에만 추가되어 일관성 부족. createParseResult(null) 호출 시 TypeError 발생 가능.",
+      "location": "viewer/src/types/ParseResult.js L45 (...overrides Spread)",
+      "fixed": true
+    },
+    {
+      "id": "CQ-3",
+      "severity": "LOW",
+      "description": "expectDefaultValues 내부 주석에 '문자열 9개 (빈 문자열)'로 기재되었으나 실제 검증하는 문자열 속성은 12개임. 주석-구현 불일치.",
+      "location": "viewer/tests/unit.test.js L171",
+      "fixed": false
+    }
+  ]
+}
