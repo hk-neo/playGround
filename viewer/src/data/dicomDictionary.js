@@ -51,7 +51,7 @@ export const EXTENDED_LENGTH_VR = new Set([
  *
  * 주의: 시퀀스 구분 태그(FFFE 그룹)도 makeTagKey 출력과 일치해야 함.
  */
-const DICTIONARY = {
+export const DICTIONARY = {
   // 파일 메타 정보 (그룹 0002)
   '00020000': { vr: 'UL', name: 'FileMetaInformationGroupLength' },
   '00020001': { vr: 'OB', name: 'FileMetaInformationVersion' },
@@ -85,7 +85,14 @@ const DICTIONARY = {
   '00180015': { vr: 'CS', name: 'BodyPartExamined' },
   '00180050': { vr: 'DS', name: 'SliceThickness' },
   '00180060': { vr: 'DS', name: 'KVP' },
+  '00180088': { vr: 'DS', name: 'SpacingBetweenSlices' },
+  '00181110': { vr: 'DS', name: 'DistanceSourceToDetector' },
+  '00181111': { vr: 'DS', name: 'DistanceSourceToPatient' },
+  '00181114': { vr: 'IS', name: 'EstimatedRadiographicMagnificationFactor' },
+  '00181150': { vr: 'DS', name: 'ExposureTime' },
   '00181151': { vr: 'IS', name: 'XRayTubeCurrent' },
+  '00181152': { vr: 'IS', name: 'Exposure' },
+  '00181160': { vr: 'DS', name: 'FilterType' },
 
   // 영상 위치/방향 (그룹 0020)
   '00200013': { vr: 'IS', name: 'InstanceNumber' },
@@ -110,6 +117,8 @@ const DICTIONARY = {
   '7FE00010': { vr: 'OW', name: 'PixelData' },
 
   // 시퀀스 구분 태그 (그룹 FFFE)
+  // makeTagKey(0xFFFE, 0x0000) = 'FFFE0000'
+  'FFFE0000': { vr: 'na', name: 'GroupLength' },
   // makeTagKey(0xFFFE, 0xE000) = 'FFFEE000'
   'FFFEE000': { vr: 'na', name: 'Item' },
   'FFFEE00D': { vr: 'na', name: 'ItemDelimitationItem' },
