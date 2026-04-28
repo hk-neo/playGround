@@ -76,12 +76,25 @@ export function validateTransferSyntax(transferSyntaxUID, parseContext, parseRes
 }
 
 /**
- * ParseResult.errors에 에러 코드를 기록한다.
+ * ParseResult.errors에 에러 정보를 기록한다.
+ * parseDICOM.js의 handleParseError()와 동일한 객체 포맷 유지.
  * @param {Object} parseResult - 파싱 결과 객체
  * @param {string} errorCode - 에러 코드
  */
 function _recordError(parseResult, errorCode) {
   if (parseResult && Array.isArray(parseResult.errors)) {
-    parseResult.errors.push(errorCode);
+    const ERROR_MESSAGES = {
+      PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX: {
+        ko: '지원하지 않는 전송 구문입니다.',
+        en: 'Unsupported transfer syntax.',
+      },
+    };
+    const msgEntry = ERROR_MESSAGES[errorCode];
+    parseResult.errors.push({
+      userMessage: msgEntry ? msgEntry.ko : errorCode,
+      debugInfo: errorCode,
+      errorCode: errorCode,
+      severity: 'error',
+    });
   }
 }
