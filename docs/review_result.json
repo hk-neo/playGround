@@ -5,69 +5,81 @@
   "issues": [
     {
       "id": "ARCH-1",
+      "severity": "HIGH",
+      "category": "Architect",
+      "file": "viewer/src/data/dicomParser/validateTransferSyntax.js",
+      "line": 57,
+      "description": "typeof transferSyntaxUID !== string 방어 로직 누락. IEC 62304 Class A에서 모든 실행 경로의 명시적 처리 요구.",
+      "fixed": true,
+      "fix_detail": "이전 리뷰에서 typeof 체크 추가됨. 이번 리뷰에서 확인 완료."
+    },
+    {
+      "id": "ARCH-2",
       "severity": "MEDIUM",
       "category": "Architect",
-      "description": "validateMagicByte.js의 import 문이 동일 모듈(constants.js)을 2줄로 분리 import하고 있음. 단일 import 문으로 병합하면 결합도 관점에서 더 깔끔함.",
-      "file": "viewer/src/data/dicomParser/validateMagicByte.js",
-      "line": 12,
-      "fixed": true
+      "file": "viewer/src/data/dicomParser/validateTransferSyntax.js",
+      "line": 76,
+      "description": "_recordError()가 parseResult.errors에 문자열만 push. parseDICOM.js에서는 {userMessage, debugInfo, errorCode, severity} 객체 포맷 사용. 포맷 불일치로 인해 직접 호출 시 에러 항목 구조가 다름.",
+      "fixed": true,
+      "fix_detail": "_recordError()를 수정하여 handleParseError()와 동일한 객체 포맷({userMessage, debugInfo, errorCode, severity})으로 push하도록 변경."
     },
     {
-      "id": "CQ-1",
-      "severity": "MEDIUM",
-      "category": "CodeQuality",
-      "description": "validateGenericMagicByte() 내부에 headerLen=4 매직 넘버가 하드코딩되어 있음. GENERIC_MAGIC_MIN_SIZE 상수를 재사용하거나 MAX_HEADER_READ_LENGTH 등의 명명된 상수로 추출 필요.",
-      "file": "viewer/src/data/dicomParser/validateMagicByte.js",
-      "line": 68,
-      "fixed": true
-    },
-    {
-      "id": "CQ-2",
+      "id": "ARCH-3",
       "severity": "LOW",
-      "category": "CodeQuality",
-      "description": "import 문 2줄 분리 (ARCH-1과 동일 원인). 동일 모듈에서 여러 식별자를 import할 때는 단일 import {} 문으로 병합하는 것이 권장됨.",
-      "file": "viewer/src/data/dicomParser/validateMagicByte.js",
-      "line": 12,
-      "fixed": true
+      "category": "Architect",
+      "file": "viewer/src/data/dicomParser/parseDICOM.js",
+      "line": 74,
+      "description": "parseDICOM.js에서 validateTransferSyntax(transferSyntaxUID) 호출 시 parseContext, parseResult 인자 미전달. COMP-1 티켓에서 통합 예정.",
+      "fixed": false
+    },
+    {
+      "id": "SEC-1",
+      "severity": "LOW",
+      "category": "Security",
+      "file": "viewer/src/data/dicomParser/validateTransferSyntax.js",
+      "line": 1,
+      "description": "configureParseContext()가 외부 전달 parseContext 객체를 직접 mutation. 내부 파이프라인에서만 사용되어 현실적 위험 없음.",
+      "fixed": false
     },
     {
       "id": "PERF-1",
       "severity": "LOW",
       "category": "Performance",
-      "description": "headerLen=4와 GENERIC_MAGIC_MIN_SIZE=4가 동일 값이지만 별도로 정의/사용되어 의미가 혼재됨. CQ-1 수정으로 함께 해결됨.",
-      "file": "viewer/src/data/dicomParser/validateMagicByte.js",
-      "line": 68,
-      "fixed": true
+      "file": "viewer/src/data/dicomParser/validateTransferSyntax.js",
+      "line": 60,
+      "description": "SUPPORTED_TRANSFER_SYNTAXES는 Set(3개 요소)으로 O(1) 조회. NFR-002(1ms 이내) 충족.",
+      "fixed": false
+    },
+    {
+      "id": "CQ-1",
+      "severity": "HIGH",
+      "category": "CodeQuality",
+      "file": "viewer/tests/unit.test.js",
+      "line": 78,
+      "description": "SDS-3.3에서 요구하는 TC-3.3.1~TC-3.3.7 및 Edge Case 테스트가 누락됨. 기존 테스트는 단일 인자 호출만 검증.",
+      "fixed": true,
+      "fix_detail": "TC-3.3.1~TC-3.3.7, EC-001(공백 포함 UID), EC-002(undefined), 비문자열 타입, parseResult 미전달 케이스 등 11개 테스트 추가. 전체 32개 테스트 통과."
+    },
+    {
+      "id": "CQ-2",
+      "severity": "MEDIUM",
+      "category": "CodeQuality",
+      "file": "viewer/src/data/dicomParser/validateTransferSyntax.js",
+      "line": 69,
+      "description": "configureParseContext()가 parseContext에 isExplicitVR/isLittleEndian 속성이 존재하는지 검증하지 않음. 잘못된 객체 전달 시 에러 없이 무시됨.",
+      "fixed": false
     }
   ],
   "review_summary": {
-    "architect": {
-      "critical": 0,
-      "high": 0,
-      "medium": 1,
-      "low": 0,
-      "note": "SOLID/레이어 분리/결합도 모두 양호. import 분리만 경미한 이슈."
-    },
-    "security": {
-      "critical": 0,
-      "high": 0,
-      "medium": 0,
-      "low": 0,
-      "note": "입력 검증, 버퍼 오버플로우 방지, 에러 메시지 노출 없음 - 이상 없음."
-    },
-    "performance": {
-      "critical": 0,
-      "high": 0,
-      "medium": 0,
-      "low": 1,
-      "note": "MAGIC_TABLE 순차 비교 O(12)로 성능 이슈 없음. 매직 넘버 중복만 경미한 이슈."
-    },
-    "code_quality": {
-      "critical": 0,
-      "high": 0,
-      "medium": 1,
-      "low": 1,
-      "note": "네이밍/에러 처리/테스트 품질 양호. headerLen 매직 넘버와 import 분리만 수정."
-    }
+    "architect": "ARCH-1(typeof 방어) 이전 수정 확인 완료. ARCH-2(errors 포맷 불일치) 이번 리뷰에서 수정. ARCH-3(parseDICOM 통합)은 COMP-1 티켓으로 이관.",
+    "security": "SEC-1(configureParseContext mutation) LOW. 내부 파이프라인에서만 사용되어 위험 없음.",
+    "performance": "PERF-1 LOW. Set O(1) 조회로 성능 이슈 없음. NFR-002 충족.",
+    "code_quality": "CQ-1 SDS 명세 기반 TC-3.3.1~TC-3.3.7 테스트 11개 추가 완료(32개 전체 통과). CQ-2 ParseContext 속성 검증은 향후 개선 권장."
+  },
+  "test_result": {
+    "total": 32,
+    "passed": 32,
+    "failed": 0,
+    "status": "전체 통과"
   }
 }

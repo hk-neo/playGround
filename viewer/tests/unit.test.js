@@ -125,6 +125,105 @@ describe("validateTransferSyntax", () => {
 });
 
 // ============================================================
+// validateTransferSyntax - SDS-3.3 TC-3.3.1 ~ TC-3.3.7, Edge Cases
+// ============================================================
+
+describe("validateTransferSyntax - TC-3.3 정상 전송 구문 검증", () => {
+  // TC-3.3.1: Explicit VR Little Endian
+  it("TC-3.3.1: Explicit VR Little Endian UID 입력 시 true 반환 및 ParseContext 설정", () => {
+    const ctx = {};
+    const result = validateTransferSyntax("1.2.840.10008.1.2.1", ctx);
+    expect(result).toBe(true);
+    expect(ctx.isExplicitVR).toBe(true);
+    expect(ctx.isLittleEndian).toBe(true);
+  });
+
+  // TC-3.3.2: Explicit VR Big Endian
+  it("TC-3.3.2: Explicit VR Big Endian UID 입력 시 true 반환 및 ParseContext 설정", () => {
+    const ctx = {};
+    const result = validateTransferSyntax("1.2.840.10008.1.2.2", ctx);
+    expect(result).toBe(true);
+    expect(ctx.isExplicitVR).toBe(true);
+    expect(ctx.isLittleEndian).toBe(false);
+  });
+
+  // TC-3.3.3: Implicit VR Little Endian
+  it("TC-3.3.3: Implicit VR Little Endian UID 입력 시 true 반환 및 ParseContext 설정", () => {
+    const ctx = {};
+    const result = validateTransferSyntax("1.2.840.10008.1.2", ctx);
+    expect(result).toBe(true);
+    expect(ctx.isExplicitVR).toBe(false);
+    expect(ctx.isLittleEndian).toBe(true);
+  });
+});
+
+describe("validateTransferSyntax - TC-3.3 미지원 전송 구문 거부", () => {
+  // TC-3.3.4: 압축 전송 구문 (JPEG Lossless)
+  it("TC-3.3.4: 압축 전송 구문(JPEG Lossless) 입력 시 false 반환 및 에러 기록", () => {
+    const parseResult = { errors: [] };
+    const result = validateTransferSyntax("1.2.840.10008.1.2.4.70", null, parseResult);
+    expect(result).toBe(false);
+    expect(parseResult.errors.length).toBeGreaterThanOrEqual(1);
+    expect(parseResult.errors[0].errorCode).toBe("PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX");
+  });
+
+  // TC-3.3.7: 존재하지 않는 UID
+  it("TC-3.3.7: 존재하지 않는 UID 입력 시 false 반환 및 에러 기록", () => {
+    const parseResult = { errors: [] };
+    const result = validateTransferSyntax("1.2.3.4.5", null, parseResult);
+    expect(result).toBe(false);
+    expect(parseResult.errors.length).toBeGreaterThanOrEqual(1);
+    expect(parseResult.errors[0].errorCode).toBe("PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX");
+  });
+});
+
+describe("validateTransferSyntax - TC-3.3 null/빈값 입력 방어", () => {
+  // TC-3.3.5: null 입력
+  it("TC-3.3.5: null 입력 시 false 반환 및 에러 기록", () => {
+    const parseResult = { errors: [] };
+    const result = validateTransferSyntax(null, null, parseResult);
+    expect(result).toBe(false);
+    expect(parseResult.errors.length).toBeGreaterThanOrEqual(1);
+    expect(parseResult.errors[0].errorCode).toBe("PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX");
+  });
+
+  // TC-3.3.6: 빈 문자열 입력
+  it("TC-3.3.6: 빈 문자열 입력 시 false 반환 및 에러 기록", () => {
+    const parseResult = { errors: [] };
+    const result = validateTransferSyntax("", null, parseResult);
+    expect(result).toBe(false);
+    expect(parseResult.errors.length).toBeGreaterThanOrEqual(1);
+    expect(parseResult.errors[0].errorCode).toBe("PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX");
+  });
+
+  // Edge Case: undefined 입력
+  it("EC-002: undefined 입력 시 false 반환 및 에러 기록", () => {
+    const parseResult = { errors: [] };
+    const result = validateTransferSyntax(undefined, null, parseResult);
+    expect(result).toBe(false);
+    expect(parseResult.errors.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // Edge Case: 선행/후행 공백 포함 UID
+  it("EC-001: 선행/후행 공백 포함 UID는 정확 일치 원칙에 의해 false 반환", () => {
+    const result = validateTransferSyntax(" 1.2.840.10008.1.2.1 ");
+    expect(result).toBe(false);
+  });
+
+  // Edge Case: 비문자열 타입 (숫자)
+  it("비문자열 타입(숫자) 입력 시 false 반환", () => {
+    const result = validateTransferSyntax(12345);
+    expect(result).toBe(false);
+  });
+
+  // parseResult 미전달 시 에러 무시 (조용히 false 반환)
+  it("parseResult 미전달 시에도 false 반환 보장", () => {
+    const result = validateTransferSyntax("bad-uid");
+    expect(result).toBe(false);
+  });
+});
+
+// ============================================================
 // ParseResult 팩토리 테스트
 // ============================================================
 
