@@ -1,80 +1,110 @@
-# Feature Specification: DentiView3D - validateTransferSyntax() 전송구문검증
+# Feature Specification: createParseContext() 파싱컨텍스트 팩토리
 
-**Feature Branch**: PLAYG-1822-validate-transfer-syntax
+**Feature Branch**: `PLAYG-1823-parse-context-factory`
 **Status**: Draft | **Date**: 2026-04-28
-**Ticket**: PLAYG-1822 | **Type**: Detailed Design (SDS-3.3)
-**Input**: docs/artifacts/SRS.md (FR-1.2), docs/artifacts/SAD.md (COMP-2)
+**Ticket**: `PLAYG-1823` | **Type**: Detailed Design
+**Input**: 티켓 description (PRD/SRS 문서 없음)
 
 ---
 
 ## User Scenarios & Testing
 
-### User Story 1 - 정상 전송 구문 검증 (Priority: P1)
-- **설명**: DICOM 파일 메타 정보에서 추출한 전송 구문 UID가 시스템에서 지원하는 3종 비압축 인코딩 방식(Explicit VR LE, Explicit VR BE, Implicit VR LE) 중 하나인 경우 검증을 통과하여 true를 반환한다.
-- **Why this priority**: DICOM 파일 파싱 파이프라인의 핵심 분기점으로, 전송 구문에 따라 후속 메타데이터 파싱의 VR 모드 및 바이트 오더가 결정되므로 최우선 구현이 필요하다.
-- **Independent Test**: SUPPORTED_TRANSFER_SYNTAXES 배열의 각 UID를 직접 전달하여 true 반환 여부를 확인한다.
+### User Story 1 — 전송 구문 기반 ParseContext 객체 생성 (Priority: P1) 🎯 MVP
+- **설명**: DICOM 파일 파싱을 시작할 때, 전송 구문(Transfer Syntax) UID를 전달하면 바이트 오더와 VR 모드가 자동으로 설정된 ParseContext 객체를 생성한다.
+- **Why this priority**: ParseContext는 모든 DICOM 파싱 로직의 기반이 되는 컨텍스트 객체로, 이것 없이는 어떤 파싱 작업도 수행할 수 없다.
+- **Independent Test**: 다양한 전송 구문 UID(Explicit VR LE, Implicit VR LE, Big Endian)를 전달하여 반환된 객체의 isExplicitVR, isLittleEndian 속성이 올바른지 단위 테스트로 검증한다.
 - **Acceptance Scenarios**:
-  1. **Given** transferSyntaxUID이 1.2.840.10008.1.2.1(Explicit VR Little Endian)이고, **When** validateTransferSyntax()를 호출하면, **Then** true를 반환하고 ParseContext에 VR 모드=Explicit, 바이트 오더=Little Endian이 설정된다
-  2. **Given** transferSyntaxUID이 1.2.840.10008.1.2.2(Explicit VR Big Endian)이고, **When** validateTransferSyntax()를 호출하면, **Then** true를 반환하고 ParseContext에 VR 모드=Explicit, 바이트 오더=Big Endian이 설정된다
-  3. **Given** transferSyntaxUID이 1.2.840.10008.1.2(Implicit VR Little Endian)이고, **When** validateTransferSyntax()를 호출하면, **Then** true를 반환하고 ParseContext에 VR 모드=Implicit, 바이트 오더=Little Endian이 설정된다
+  1. **Given** 유효한 ArrayBuffer와 `1.2.840.10008.1.2.1`(Explicit VR LE) UID가 주어졌을 때, **When** `createParseContext(buffer, uid)`를 호출하면, **Then** 반환 객체의 isExplicitVR=true, isLittleEndian=true이어야 한다.
+  2. **Given** 유효한 ArrayBuffer와 `1.2.840.10008.1.2`(Implicit VR LE) UID가 주어졌을 때, **When** `createParseContext(buffer, uid)`를 호출하면, **Then** 반환 객체의 isExplicitVR=false, isLittleEndian=true이어야 한다.
+  3. **Given** 유효한 ArrayBuffer와 `1.2.840.10008.1.2.2`(Big Endian) UID가 주어졌을 때, **When** `createParseContext(buffer, uid)`를 호출하면, **Then** 반환 객체의 isExplicitVR=true, isLittleEndian=false이어야 한다.
 
-### User Story 2 - 미지원 전송 구문 거부 (Priority: P1)
-- **설명**: 시스템에서 지원하지 않는 전송 구문 UID(압축 인코딩, 존재하지 않는 UID 등)가 입력되면 PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX 에러를 발생시키고 false를 반환하여 후속 파싱을 중단한다.
-- **Why this priority**: 압축 전송 구문이나 잘못된 UID로 파싱을 진행하면 데이터 훼손 및 런타임 오류가 발생할 수 있으므로 안전 차원에서 필수이다.
-- **Independent Test**: 지원하지 않는 UID(예: JPEG Lossless 1.2.840.10008.1.2.4.70)를 전달하여 false 반환 및 에러 코드 발생을 확인한다.
+### User Story 2 — 버퍼 읽기 유틸리티 메서드 제공 (Priority: P1) 🎯 MVP
+- **설명**: ParseContext 객체는 버퍼에서 데이터를 읽기 위한 메서드(readUint16, readUint32, readInt16, readString, readBytes)를 제공하며, 읽기 후 offset이 자동으로 전진한다.
+- **Why this priority**: 파서 모듈들이 DICOM 태그의 그룹 번호, 엘리먼트 번호, 길이 등을 읽기 위해 필수적으로 사용하는 핵심 기능이다.
+- **Independent Test**:已知 offset 위치의 버퍼에 특정 바이트 값을 쓰고, 각 read 메서드 호출 후 반환값과 offset 증가량을 단위 테스트로 검증한다.
 - **Acceptance Scenarios**:
-  1. **Given** transferSyntaxUID이 압축 전송 구문(예: 1.2.840.10008.1.2.4.70)이고, **When** validateTransferSyntax()를 호출하면, **Then** false를 반환하고 ErrorManager.handleError(PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX)가 호출되며 ParseResult.errors에 에러가 기록된다
-  2. **Given** transferSyntaxUID이 임의의 존재하지 않는 UID 문자열이고, **When** validateTransferSyntax()를 호출하면, **Then** false를 반환하고 동일한 에러 처리가 수행된다
+  1. **Given** offset=0이고 버퍼에 Little-Endian으로 `0x0010`이 저장되어 있을 때, **When** `readUint16()`을 호출하면, **Then** 16을 반환하고 offset은 2가 되어야 한다.
+  2. **Given** offset=0이고 버퍼에 `ABCD` 문자열이 저장되어 있을 때, **When** `readString(4)`를 호출하면, **Then** `'ABCD'`를 반환하고 offset은 4가 되어야 한다.
+  3. **Given** offset=0이고 버퍼에 4바이트가 저장되어 있을 때, **When** `readBytes(4)`를 호출하면, **Then** 길이 4의 Uint8Array를 반환하고 offset은 4가 되어야 한다.
 
-### User Story 3 - null/빈값 입력 방어 (Priority: P1)
-- **설명**: 전송 구문 UID가 null, undefined, 빈 문자열인 경우 PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX 에러를 발생시키고 false를 반환한다.
-- **Why this priority**: 메타 그룹 파싱 단계에서 전송 구문 필드가 누락되거나 비어 있는 비정상 DICOM 파일에 대한 방어 로직으로 안전 등급 Class A 필수 요구사항이다.
-- **Independent Test**: null, undefined, 빈 문자열을 각각 전달하여 false 반환 및 에러 처리를 확인한다.
+### User Story 3 — offset 제어 및 남은 바이트 확인 (Priority: P2)
+- **설명**: ParseContext 객체는 `advance(amount)`, `remaining()`, `hasRemaining(n)` 메서드를 제공하여 파서가 버퍼 탐색 위치를 유연하게 제어할 수 있게 한다.
+- **Why this priority**: 파싱 루프에서 시퀀스_delimiter 처리, 길이 기반 스킵 등에 필수적이지만, 기본 read 메서드보다 보조적인 성격이다.
+- **Independent Test**: startOffset이 10인 상태에서 advance(5), remaining(), hasRemaining() 호출 결과를 단위 테스트로 검증한다.
 - **Acceptance Scenarios**:
-  1. **Given** transferSyntaxUID이 null이고, **When** validateTransferSyntax()를 호출하면, **Then** false를 반환하고 ErrorManager.handleError(PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX)가 호출된다
-  2. **Given** transferSyntaxUID이 undefined이고, **When** validateTransferSyntax()를 호출하면, **Then** false를 반환하고 동일한 에러 처리가 수행된다
-  3. **Given** transferSyntaxUID이 빈 문자열이고, **When** validateTransferSyntax()를 호출하면, **Then** false를 반환하고 동일한 에러 처리가 수행된다
+  1. **Given** 100바이트 버퍼와 startOffset=10으로 생성된 ParseContext에서, **When** `remaining()`을 호출하면, **Then** 90을 반환해야 한다.
+  2. **Given** offset=50인 상태에서, **When** `hasRemaining(60)`을 호출하면, **Then** false를 반환해야 한다.
+  3. **Given** offset=10인 상태에서, **When** `advance(20)`을 호출하면, **Then** offset은 30이 되어야 한다.
+
+### User Story 4 — 예외 및 기본값 처리 (Priority: P2)
+- **설명**: 전송 구문 UID가 null/undefined인 경우 기본값(EXPLICIT_VR_LE)으로 동작하며, 파싱 중 발생한 오류는 errors 배열에 수집된다.
+- **Why this priority**: 견고한 파싱을 위해 필수적이지만, 정상 경로가 먼저 검증되어야 한다.
+- **Independent Test**: null/undefined UID를 전달한 경우와 버퍼 경계를 벗어나는 읽기를 시도한 경우의 동작을 단위 테스트로 검증한다.
+- **Acceptance Scenarios**:
+  1. **Given** transferSyntaxUID가 null일 때, **When** `createParseContext(buffer, null)`을 호출하면, **Then** isExplicitVR=true, isLittleEndian=true(기본값)으로 설정되어야 한다.
+  2. **Given** transferSyntaxUID가 undefined일 때, **When** `createParseContext(buffer, undefined)`을 호출하면, **Then** 기본값(EXPLICIT_VR_LE) 설정으로 정상 생성되어야 한다.
+  3. **Given** buffer가 null일 때, **When** `createParseContext(null, uid)`을 호출하면, **Then** DataView 생성 시 TypeError가 발생해야 한다.
 
 ### Edge Cases (엣지 케이스)
-- **EC-001**: 전송 구문 UID 문자열에 선행/후행 공백이 포함된 경우 - 공백이 포함된 채로는 SUPPORTED_TRANSFER_SYNTAXES와 불일치하므로 미지원으로 처리됨
-- **EC-002**: 대소문자가 다른 UID 입력 - DICOM UID는 OID 기반으로 대소문자 구분이 없으나, 본 함수는 문자열 정확 일치(exact match)를 사용하므로 사양에 맞는 정확한 UID만 허용됨
-- **EC-003**: 숫자 타입의 UID 입력 - 함수 시그니처가 string 타입이므로 타입 스크립트/런타임에서 사전 차단됨
+- **EC-001**: 알 수 없는 전송 구문 UID가 전달된 경우 — 기본값(EXPLICIT_VR_LE)으로 동작해야 함
+- **EC-002**: startOffset이 버퍼 길이보다 큰 경우 — remaining()이 음수가 아닌 0을 반환해야 함
+- **EC-003**: offset이 버퍼 끝을 넘어 readUint16/readUint32 호출 시 — undefined 반환 또는 errors 배열에 오류 기록
+- **EC-004**: readBytes/readString에 length=0 전달 시 — 빈 Uint8Array/빈 문자열 반환, offset 변화 없음
+- **EC-005**: 빈 ArrayBuffer(길이 0)로 생성 시 — remaining()=0, hasRemaining()=false
 
 ---
 
 ## Requirements
 
-### 기능 요구사항 (Functional Requirements)
-- **FR-1.2.1**: 시스템은 validateTransferSyntax(transferSyntaxUID: string): boolean 함수를 제공해야 하며, SUPPORTED_TRANSFER_SYNTAXES 상수 배열(3종 UID)을 기준으로 입력 UID의 유효성을 검증해야 한다
-- **FR-1.2.2**: 입력값이 null, undefined, 빈 문자열인 경우 PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX 에러를 발생시키고 false를 반환해야 한다
-- **FR-1.2.3**: 입력 UID가 SUPPORTED_TRANSFER_SYNTAXES에 포함된 경우 true를 반환하며, ParseContext에 해당 전송 구문의 VR 모드(Explicit/Implicit)와 바이트 오더(Little Endian/Big Endian)를 설정해야 한다
-- **FR-1.2.4**: 입력 UID가 SUPPORTED_TRANSFER_SYNTAXES에 포함되지 않은 경우 PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX 에러를 발생시키고 false를 반환하며, ParseResult.errors에 에러 코드를 추가해야 한다
-- **FR-1.2.5**: validateTransferSyntax()는 DicomParser.parseDICOM() 내에서 validateMagicByte() 통과 후, parseMetadata() 호출 전에 실행되어야 한다
+### Functional Requirements (기능 요구사항)
+- **FR-001**: `createParseContext(buffer, transferSyntaxUID, startOffset=0)` 함수를 제공해야 하며, ParseContext 객체를 반환해야 한다.
+- **FR-002**: 전송 구문 UID `1.2.840.10008.1.2`(IMPLICIT_VR_LE)에 대해 isExplicitVR=false, isLittleEndian=true으로 설정해야 한다.
+- **FR-003**: 전송 구문 UID `1.2.840.10008.1.2.2`(BIG_ENDIAN)에 대해 isExplicitVR=true, isLittleEndian=false으로 설정해야 한다.
+- **FR-004**: 전송 구문 UID `1.2.840.10008.1.2.1`(EXPLICIT_VR_LE)에 대해 isExplicitVR=true, isLittleEndian=true으로 설정해야 한다.
+- **FR-005**: 반환 객체는 원본 ArrayBuffer를 `buffer` 속성으로 저장해야 한다.
+- **FR-006**: 반환 객체는 DataView 래퍼를 `dataView` 속성으로 저장해야 한다.
+- **FR-007**: 반환 객체의 `offset` 속성은 startOffset 값으로 초기화되어야 한다 (기본값 0).
+- **FR-008**: 반환 객체는 `transferSyntaxUID` 속성으로 전달받은 UID를 저장해야 한다.
+- **FR-009**: 반환 객체는 빈 배열 `errors[]`를 포함하여 파싱 중 오류/경고를 수집할 수 있어야 한다.
+- **FR-010**: `remaining()` 메서드는 `buffer.byteLength - offset`을 반환해야 한다.
+- **FR-011**: `readUint16()` 메서드는 현재 offset에서 2바이트를 읽어 부호 없는 정수로 반환하고 offset을 2 증가시켜야 한다.
+- **FR-012**: `readUint32()` 메서드는 현재 offset에서 4바이트를 읽어 부호 없는 정수로 반환하고 offset을 4 증가시켜야 한다.
+- **FR-013**: `readInt16()` 메서드는 현재 offset에서 2바이트를 읽어 부호 있는 정수로 반환하고 offset을 2 증가시켜야 한다.
+- **FR-014**: `readString(length)` 메서드는 지정된 길이만큼 문자열을 읽고 offset을 length만큼 증가시켜야 한다.
+- **FR-015**: `readBytes(length)` 메서드는 지정된 길이만큼 Uint8Array를 읽고 offset을 length만큼 증가시켜야 한다.
+- **FR-016**: `advance(amount)` 메서드는 offset을 지정된 양만큼 전진시켜야 한다.
+- **FR-017**: `hasRemaining(n)` 메서드는 버퍼에 n바이트 이상 남아 있는지 boolean으로 반환해야 한다.
+- **FR-018**: 모든 read 메서드는 DataView의 바이트 오더 인자로 isLittleEndian 값을 전달해야 한다.
+- **FR-019**: 전송 구문이 null 또는 undefined인 경우 EXPLICIT_VR_LE 기본값으로 동작해야 한다.
+- **FR-020**: 알 수 없는 전송 구문 UID인 경우 EXPLICIT_VR_LE 기본값으로 동작해야 한다.
 
-### 비기능 요구사항 (Non-Functional Requirements)
-- **NFR-001 (안전)**: IEC 62304 Class A 요구사항에 따라 모든 실행 경로에서 명시적 반환값(boolean)을 보장해야 하며, 예외 미발생(uncaught exception 없음)을 보장해야 한다
-- **NFR-002 (성능)**: SUPPORTED_TRANSFER_SYNTAXES 배열 크기가 3개(고정)이므로 O(n) 선형 검색으로 충분하며, 함수 실행 시간은 1ms 이내여야 한다
-- **NFR-003 (추적성)**: 본 함수는 FR-1.2(전송 구문 검증), HAZ-1.2, RMR-03에 추적 가능해야 하며, 단위 테스트 TC-3.3.1~TC-3.3.7로 검증되어야 한다
+### Non-Functional Requirements (비기능 요구사항)
+- **NFR-001 (성능)**: ParseContext 생성 및 read 메서드 호출은 O(1) 시간 복잡도를 가져야 한다. DataView 래핑으로 인한 추가 메모리 오버헤드는 최소화해야 한다.
+- **NFR-002 (안정성)**: 버퍼 경계를 벗어나는 읽기 시 애플리케이션이 중단되지 않아야 하며, errors 배열에 오류를 기록하고 안전한 기본값을 반환해야 한다.
+- **NFR-003 (재사용성)**: ParseContext는 순수 데이터 객체로서 외부 상태에 의존하지 않아야 하며, 동일 버퍼에 대해 여러 ParseContext를 독립적으로 생성할 수 있어야 한다.
 
-### 핵심 데이터 모델 (Key Entities)
-- **SUPPORTED_TRANSFER_SYNTAXES**: string[] - 시스템 지원 전송 구문 UID 배열. 요소: 1.2.840.10008.1.2.1(Explicit VR LE), 1.2.840.10008.1.2.2(Explicit VR BE), 1.2.840.10008.1.2(Implicit VR LE)
-- **ParseContext**: 파싱 컨텍스트 객체 - 핵심 속성: vrMode(Explicit|Implicit), byteOrder(LittleEndian|BigEndian). validateTransferSyntax() 성공 시 설정됨
-- **ParseResult**: 파싱 결과 객체 - 핵심 속성: errors(ErrorCode[]). validateTransferSyntax() 실패 시 PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX가 추가됨
-- **ErrorManager**: 에러 관리 모듈 (COMP-7) - handleError(errorCode: string) 메서드를 통해 에러 메시지 생성 및 로깅 수행
+### Key Entities (핵심 데이터 모델)
+- **ParseContext**: DICOM 파싱 세션의 내부 상태를 관리하는 객체 — 핵심 속성: buffer, dataView, offset, isLittleEndian, isExplicitVR, transferSyntaxUID, errors[]
+- **TRANSFER_SYNTAX**: 전송 구문 UID를 상수로 정의한 사전 객체 — 키: IMPLICIT_VR_LE, BIG_ENDIAN, EXPLICIT_VR_LE
+
+### Dependencies (의존성)
+- `data/dicomDictionary.js` — TRANSFER_SYNTAX 상수 임포트
+- 호출처: `metaGroupParser.js`, `metadataParser.js`
+- 추적 가능성: FR-1.2, FR-1.3, US-1, US-2
 
 ---
 
 ## Success Criteria
 
-### 측정 가능한 지표 (Measurable Outcomes)
-- **SC-001**: TC-3.3.1~TC-3.3.3 (정상 UID 3종) 테스트가 모두 true를 반환하고 각각 올바른 VR 모드와 바이트 오더가 ParseContext에 설정됨
-- **SC-002**: TC-3.3.4~TC-3.3.7 (압축 UID, null, 빈 문자열, 존재하지 않는 UID) 테스트가 모두 false를 반환하고 ErrorManager.handleError가 호출됨
-- **SC-003**: 모든 실행 경로(정상/비정상)에서 예외 발생 없이 boolean 값이 반환됨
+### Measurable Outcomes (측정 가능한 지표)
+- **SC-001**: 세 가지 전송 구문(Explicit VR LE, Implicit VR LE, Big Endian)에 대해 isExplicitVR, isLittleEndian 값이 100% 정확하게 설정된다.
+- **SC-002**: 모든 read 메서드(readUint16, readUint32, readInt16, readString, readBytes) 호출 후 offset이 정확히 증가한다.
+- **SC-003**: null/undefined/알 수 없는 UID 입력 시 기본값(EXPLICIT_VR_LE)으로 안전하게 폴백한다.
+- **SC-004**: startOffset 매개변수가 정상적으로 반영되어 remaining() 계산이 일치한다.
 
 ### Definition of Done
-- [ ] FR-1.2.1~FR-1.2.5 모든 기능 요구사항 구현 완료
-- [ ] 단위 테스트 TC-3.3.1~TC-3.3.7 전부 통과
-- [ ] Edge Case 시나리오(EC-001~EC-003) 검증 완료
-- [ ] IEC 62304 Class A 단위 테스트 증거 문서화 완료
+- [ ] 모든 FR-001 ~ FR-020 요구사항 구현 완료
+- [ ] 단위 테스트 커버리지 90% 이상
+- [ ] Edge Case(EC-001 ~ EC-005) 시나리오 검증 완료
 - [ ] 코드 리뷰 승인
-- [ ] SRS FR-1.2, SAD COMP-2 추적성 매트릭스 업데이트
+- [ ] metaGroupParser.js, metadataParser.js와의 연동 테스트 통과

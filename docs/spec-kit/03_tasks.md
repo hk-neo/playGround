@@ -1,7 +1,7 @@
-# Tasks: DentiView3D - validateTransferSyntax() 전송구문검증
+# Tasks: createParseContext() 파싱컨텍스트 팩토리
 
 **Input**: `docs/spec-kit/01_spec.md`, `docs/spec-kit/02_plan.md`
-**Ticket**: `PLAYG-1822` | **Date**: 2026-04-28
+**Ticket**: `PLAYG-1823` | **Date**: 2026-04-28
 
 > **형식 안내**
 > - `[ID]` : 태스크 번호 (T001, T002, ...)
@@ -14,301 +14,225 @@
 ## Phase 1: Setup (공통 인프라)
 <!-- 모든 다음 단계에 필요한 공통 환경 설정 -->
 
-- [ ] **T001** 🔒 기존 상수 및 에러 코드 정의 확인
-  - 파일: `viewer/src/data/dicomDictionary.js`, `viewer/src/data/dicomParser/constants.js`
+- [ ] **T001** 🔒 브랜치 생성 및 개발 환경 확인
+  - 파일: `viewer/src/data/dicomParser/ParseContext.js`, `viewer/vite.config.js`
   - 세부 내용:
-    - `dicomDictionary.js`에서 `TRANSFER_SYNTAX` 상수가 3종 UID를 올바르게 정의하는지 확인
-      - `EXPLICIT_VR_LE = '1.2.840.10008.1.2.1'`
-      - `IMPLICIT_VR_LE = '1.2.840.10008.1.2'`
-      - `BIG_ENDIAN = '1.2.840.10008.1.2.2'`
-    - `SUPPORTED_TRANSFER_SYNTAXES` Set이 상기 3종 UID를 포함하는지 확인
-    - `constants.js`에서 `ERROR_CODES.PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX` 에러 코드가 정의되어 있는지 확인
-    - 누락된 항목이 있으면 즉시 보완
-  - 완료 조건:
-    - `dicomDictionary.js`에 3종 TRANSFER_SYNTAX 상수 및 SUPPORTED_TRANSFER_SYNTAXES Set이 정의됨
-    - `constants.js`에 PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX 에러 코드가 존재함
-    - `node -e` 명령으로 각 상수 값을 콘솔 출력하여 값 일치 확인
+    - `feature/PLAYG-1823-parse-context-factory` 브랜치 체크아웃
+    - 기존 ParseContext.js 코드 분석 결과 확인 (Gap Analysis 완료 상태)
+    - Vitest 3.x + jsdom 환경에서 ArrayBuffer/DataView API 동작 확인
+    - dicomDictionary.js의 TRANSFER_SYNTAX 상수 구조(`IMPLICIT_VR_LE`, `BIG_ENDIAN`, `EXPLICIT_VR_LE`) 확인
+  - 완료 조건: 브랜치 생성 완료, `npm install` 성공, 기존 테스트 전체 PASS
 
-- [ ] **T002** 🔒 ParseContext 타입 정의 및 handleParseError 유틸리티 확인
-  - 파일: `viewer/src/data/dicomParser/parseContext.js`, `viewer/src/data/dicomParser/handleParseError.js`
+- [ ] **T002** 🔒 단위 테스트 파일 생성 및 테스트 스켈레톤 작성
+  - 파일: `viewer/tests/unit/ParseContext.test.js`
   - 세부 내용:
-    - ParseContext 객체 구조가 `vrMode` (Explicit|Implicit|null) 및 `byteOrder` (LittleEndian|BigEndian|null) 속성을 갖는지 확인
-    - `handleParseError(errorCode, parseResult)` 유틸리티 함수가 존재하고 정상 동작하는지 확인
-    - 누락 시 최소 구현체를 작성 (객체 팩토리 함수, 에러 로깅 래퍼)
-    - 기존 `createParseResult()` 함수와의 호환성 확인
-  - 완료 조건:
-    - ParseContext 생성 시 `{ vrMode: null, byteOrder: null }` 초기 상태 확인
-    - handleParseError 호출 시 ParseResult.errors 배열에 에러 코드가 추가됨
-    - 기존 단위 테스트가 모두 PASS 상태 유지
+    - `describe('createParseContext', ...)` 최상위 스위트 생성
+    - 4개 하위 describe 블록 스켈레톤 생성: Suite A(전송 구문별 설정), Suite B(버퍼 읽기 메서드), Suite C(offset 제어 메서드), Suite D(에러 및 예외 처리)
+    - 공통 헬퍼 함수 작성: `createBuffer(size, fillFn)`, `writeUint16LE(buf, offset, val)`, `writeUint32LE(buf, offset, val)` 등
+    - `beforeEach`에서 테스트용 100바이트 ArrayBuffer 생성
+  - 완료 조건: 테스트 파일 생성, `npx vitest run tests/unit/ParseContext.test.js` 실행 시 0 tests 등록 에러 없이 완료
 
 ---
+
 ## Phase 2: Foundational (선행 필수 항목)
 <!-- CRITICAL: 사용자 스토리 구현 전 반드시 완료해야 할 핵심 인프라 -->
 
-- [ ] **T003** 🔒 validateTransferSyntax() 함수 골격 구현
-  - 파일: `viewer/src/data/dicomParser/validateTransferSyntax.js`
+- [ ] **T003** 🔒 startOffset 검증 로직 추가 (EC-002)
+  - 파일: `viewer/src/data/dicomParser/ParseContext.js`
+  - 관련 요구사항: EC-002, FR-007
   - 세부 내용:
-    - 함수 시그니처: `export function validateTransferSyntax(transferSyntaxUID, parseContext)`
-    - `dicomDictionary.js`에서 `TRANSFER_SYNTAX`, `SUPPORTED_TRANSFER_SYNTAXES` 임포트
-    - `constants.js`에서 `ERROR_CODES` 임포트
-    - `handleParseError.js`에서 `handleParseError` 임포트
-    - 입력 방어 로직 구현: `transferSyntaxUID`이 null, undefined, 빈 문자열인 경우 handleParseError 호출 후 false 반환
-    - 본체 로직: `SUPPORTED_TRANSFER_SYNTAXES.has(transferSyntaxUID)` 검사 후 true/false 반환
-    - configureParseContext 내부 헬퍼 구현 (아래 T004에서 세부 구현)
-  - 추적: FR-1.2.1, FR-1.2.2, NFR-001 (IEC 62304 Class A 안전 등급)
-  - 완료 조건:
-    - 함수가 존재하고 export 됨
-    - null, undefined, 빈 문자열 입력 시 false 반환 (예외 발생 없음)
-    - 지원 UID 입력 시 true 반환 (ParseContext 설정은 T004에서 검증)
+    - `createParseContext()` 함수 내부에서 startOffset 검증 추가
+    - startOffset이 음수인 경우 0으로 보정
+    - startOffset이 buffer.byteLength를 초과하는 경우 buffer.byteLength로 보정
+    - 보정 발생 시 errors 배열에 `{ type: 'INVALID_START_OFFSET', requested: 원래값, corrected: 보정값 }` 객체 추가
+    - `remaining()` 메서드에 `Math.max(0, this.buffer.byteLength - this.offset)` 적용하여 음수 반환 방지
+  - 완료 조건: startOffset=999(버퍼 초과) 전달 시 remaining()이 0 반환, errors 배열에 경고 기록
 
-- [ ] **T004** 🔒 configureParseContext() 헬퍼 함수 구현
-  - 파일: `viewer/src/data/dicomParser/validateTransferSyntax.js` (T003 파일 내부)
+- [ ] **T004** 🔒 버퍼 경계 보호 로직 추가 (NFR-002, EC-003)
+  - 파일: `viewer/src/data/dicomParser/ParseContext.js`
+  - 관련 요구사항: NFR-002, EC-003
   - 세부 내용:
-    - `configureParseContext(parseContext, transferSyntaxUID)` 내부 함수 구현
-    - switch 문으로 3종 UID에 따라 ParseContext 설정:
-      - `TRANSFER_SYNTAX.EXPLICIT_VR_LE` -> `vrMode='Explicit'`, `byteOrder='LittleEndian'`
-      - `TRANSFER_SYNTAX.BIG_ENDIAN` -> `vrMode='Explicit'`, `byteOrder='BigEndian'`
-      - `TRANSFER_SYNTAX.IMPLICIT_VR_LE` -> `vrMode='Implicit'`, `byteOrder='LittleEndian'`
-    - validateTransferSyntax() 내부에서 지원 UID 감지 시 configureParseContext() 호출하도록 연결
-  - 추적: FR-1.2.3
-  - 완료 조건:
-    - 각 UID별로 ParseContext의 vrMode, byteOrder가 정확히 설정됨
-    - 지원하지 않는 UID가 들어올 경우 ParseContext는 변경되지 않음
-    - 함수 전체 순환 복잡도(CC) 7 이하 유지
+    - 내부 헬퍼 함수 `_checkBounds(ctx, byteCount)` 추가: hasRemaining 체크 후 실패 시 errors 기록
+    - `readUint16()`: 경계 초과 시 0 반환, errors에 `{ type: 'READ_OVERFLOW', offset, requested: 2, available }` 기록
+    - `readUint32()`: 경계 초과 시 0 반환, 동일한 방식의 errors 기록
+    - `readInt16()`: 경계 초과 시 0 반환, 동일한 방식의 errors 기록
+    - `readString(length)`: 경계 초과 시 빈 문자열 반환, errors 기록
+    - `readBytes(length)`: 경계 초과 시 빈 Uint8Array 반환, errors 기록
+    - 모든 read 메서드에서 초과 시 offset 변경 없음 보장
+  - 완료 조건: offset=끝에서 readUint16() 호출 시 애플리케이션 중단 없이 0 반환, errors 배열에 오류 기록
 
-- [ ] **T005** 🔒 미지원 UID 에러 처리 로직 구현
-  - 파일: `viewer/src/data/dicomParser/validateTransferSyntax.js` (T003 파일 내부)
+- [ ] **T005** 🔒 JSDoc 보완 및 경계 케이스 검증 (EC-004, EC-005)
+  - 파일: `viewer/src/data/dicomParser/ParseContext.js`
+  - 관련 요구사항: EC-004, EC-005, NFR-001
   - 세부 내용:
-    - 지원하지 않는 UID 입력 시 `handleParseError(PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX, parseResult)` 호출
-    - null/undefined/빈 문자열 입력 시 동일한 에러 처리 경로 사용
-    - 모든 에러 경로에서 예외(throw) 없이 false 반환 보장
-    - 함수 반환값이 항상 boolean 타입임을 보장 (IEC 62304 Class A)
-  - 추적: FR-1.2.2, FR-1.2.4, NFR-001
-  - 완료 조건:
-    - 미지원 UID, null, undefined, 빈 문자열 입력 시 모두 false 반환
-    - 모든 false 경로에서 handleParseError가 호출됨
-    - 어떤 입력에 대해서도 예외(throw)가 발생하지 않음
+    - `@throws` 태그 추가: buffer가 null/undefined인 경우 TypeError 발생 명시
+    - `@typedef` 블록 추가: ParseContext 반환 객체의 속성 및 메서드 타입 정보 문서화
+    - readBytes(0) 자연 처리 확인: 빈 Uint8Array 반환, offset 변화 없음 검증
+    - readString(0) 자연 처리 확인: 빈 문자열 반환, offset 변화 없음 검증
+    - 빈 ArrayBuffer(byteLength=0) 처리 확인: 생성 허용, remaining()=0, hasRemaining(1)=false
+    - 모든 read 메서드가 O(1) 시간 복잡도 유지 확인 (DataView 직접 접근 방식 확인)
+  - 완료 조건: JSDoc에 @throws 태그 포함, readBytes(0)/readString(0)이 에러 없이 동작
 
 ---
-## Phase 3: User Story 1 — 정상 전송 구문 검증 (Priority: P1) TARGET MVP
+## Phase 3: User Story 1 — 전송 구문 기반 ParseContext 객체 생성 (Priority: P1) 🎯 MVP
 
-- **Goal**: DICOM 파일 메타 정보에서 추출한 전송 구문 UID가 시스템에서 지원하는 3종 비압축 인코딩 방식 중 하나인 경우 true를 반환하고 ParseContext에 VR 모드 및 바이트 오더를 설정한다.
-- **Independent Test**: SUPPORTED_TRANSFER_SYNTAXES Set의 각 UID를 직접 전달하여 true 반환 및 ParseContext 설정 값을 확인한다.
-- **추적**: US-1 (Spec 01_spec.md), FR-1.2.1, FR-1.2.3
+- **Goal**: 전송 구문(Transfer Syntax) UID에 따라 바이트 오더와 VR 모드가 자동 설정된 ParseContext 객체를 생성한다.
+- **Independent Test**: 다양한 전송 구문 UID를 전달하여 isExplicitVR, isLittleEndian 속성이 올바른지 단위 테스트로 검증한다.
 
-- [ ] **T006** 🔀 [US1] Explicit VR Little Endian 검증 경로 확인
-  - 파일: `viewer/src/data/dicomParser/validateTransferSyntax.js`
+- [ ] **T006** 🔀 [US1] 전송 구문별 설정 테스트 작성 (FR-002~004, FR-019~020)
+  - 파일: `viewer/tests/unit/ParseContext.test.js`
+  - 관련 요구사항: FR-002, FR-003, FR-004, FR-019, FR-020
   - 세부 내용:
-    - 입력: `'1.2.840.10008.1.2.1'` (TRANSFER_SYNTAX.EXPLICIT_VR_LE)
-    - 기대 결과: true 반환, `parseContext.vrMode === 'Explicit'`, `parseContext.byteOrder === 'LittleEndian'`
-    - 수동 검증: `node -e` 로 함수 직접 호출하여 반환값 및 ParseContext 상태 확인
-  - 완료 조건:
-    - 함수 호출 결과가 true임을 수동으로 확인
-    - ParseContext의 vrMode가 'Explicit', byteOrder가 'LittleEndian'으로 설정됨
+    - Suite A: `describe('전송 구문별 설정')` 내에 다음 테스트 케이스 작성:
+    - Explicit VR LE (`1.2.840.10008.1.2.1`): isExplicitVR=true, isLittleEndian=true 검증
+    - Implicit VR LE (`1.2.840.10008.1.2`): isExplicitVR=false, isLittleEndian=true 검증
+    - Big Endian (`1.2.840.10008.1.2.2`): isExplicitVR=true, isLittleEndian=false 검증
+    - null UID 기본값 폴백: EXPLICIT_VR_LE 기본값 검증
+    - undefined UID 기본값 폴백: EXPLICIT_VR_LE 기본값 검증
+    - 알 수 없는 UID (`9.9.9.9.9`): EXPLICIT_VR_LE 기본값 검증
+    - 반환 객체 속성 검증: buffer, dataView, offset, transferSyntaxUID, errors 필드 존재 확인
+  - 완료 조건: Suite A의 7개 테스트 케이스 전체 PASS
 
-- [ ] **T007** 🔀 [US1] Explicit VR Big Endian 및 Implicit VR Little Endian 검증 경로 확인
-  - 파일: `viewer/src/data/dicomParser/validateTransferSyntax.js`
+- [ ] **T007** 🔀 [US2] 버퍼 읽기 메서드 테스트 작성 (FR-011~015, FR-018)
+  - 파일: `viewer/tests/unit/ParseContext.test.js`
+  - 관련 요구사항: FR-011, FR-012, FR-013, FR-014, FR-015, FR-018
   - 세부 내용:
-    - 입력 1: `'1.2.840.10008.1.2.2'` (TRANSFER_SYNTAX.BIG_ENDIAN)
-      - 기대: true 반환, vrMode='Explicit', byteOrder='BigEndian'
-    - 입력 2: `'1.2.840.10008.1.2'` (TRANSFER_SYNTAX.IMPLICIT_VR_LE)
-      - 기대: true 반환, vrMode='Implicit', byteOrder='LittleEndian'
-    - 수동 검증으로 각 경로 확인
-  - 완료 조건:
-    - 3종 UID 모두 true 반환 및 올바른 ParseContext 설정 완료
-    - 기존 기능에 영향 없음 (기존 테스트 PASS 유지)
+    - Suite B: `describe('버퍼 읽기 메서드')` 내에 다음 테스트 케이스 작성:
+    - Little-Endian readUint16(): 올바른 값 반환 + offset +2 검증
+    - Big-Endian readUint16(): 바이트 오더 반영 값 + offset +2 검증
+    - readUint32(): 올바른 값 반환 + offset +4 검증
+    - readInt16(음수): 음수 올바른 해석 + offset +2 검증
+    - readString(4): 'ABCD' 반환 + offset +4 검증
+    - readBytes(4): Uint8Array(4) 반환 + offset +4 검증
+    - DataView 바이트 오더 인자 전달 검증 (LE/BE 전환 시 값 변화 확인)
+  - 완료 조건: Suite B의 7개 테스트 케이스 전체 PASS
 
-- [ ] **T008** 🔒 [US1] US1 단위 테스트 작성 (TC-3.3.1, TC-3.3.2, TC-3.3.3)
-  - 파일: `viewer/tests/unit.test.js`
+- [ ] **T008** 🔀 [US3] offset 제어 메서드 테스트 작성 (FR-010, FR-016, FR-017)
+  - 파일: `viewer/tests/unit/ParseContext.test.js`
+  - 관련 요구사항: FR-010, FR-016, FR-017
   - 세부 내용:
-    - TC-3.3.1: Explicit VR LE (`'1.2.840.10008.1.2.1'`) -> true, vrMode=Explicit, byteOrder=LittleEndian
-    - TC-3.3.2: Explicit VR BE (`'1.2.840.10008.1.2.2'`) -> true, vrMode=Explicit, byteOrder=BigEndian
-    - TC-3.3.3: Implicit VR LE (`'1.2.840.10008.1.2'`) -> true, vrMode=Implicit, byteOrder=LittleEndian
-    - 각 테스트에서 ParseContext mock 객체를 생성하여 검증
-    - describe 블록: `'validateTransferSyntax - 정상 전송 구문 검증'`
-  - 완료 조건:
-    - TC-3.3.1, TC-3.3.2, TC-3.3.3 모두 PASS
-    - 테스트 커버리지 대상 함수 내 정상 경로 100% 커버
+    - Suite C: `describe('offset 제어 메서드')` 내에 다음 테스트 케이스 작성:
+    - startOffset=10에서 remaining(): buffer.length - 10 반환 검증
+    - advance(20) 후 offset 확인: startOffset + 20 검증
+    - hasRemaining(잔여량 이상): true 반환 검증
+    - hasRemaining(잔여량 초과): false 반환 검증
+    - advance 후 remaining() 감소 확인
+  - 완료 조건: Suite C의 5개 테스트 케이스 전체 PASS
+
+- [ ] **T009** 🔀 [US4] 에러 및 예외 처리 테스트 작성 (NFR-002, EC-001~005)
+  - 파일: `viewer/tests/unit/ParseContext.test.js`
+  - 관련 요구사항: NFR-002, EC-001, EC-002, EC-003, EC-004, EC-005
+  - 세부 내용:
+    - Suite D: `describe('에러 및 예외 처리')` 내에 다음 테스트 케이스 작성:
+    - buffer null 시 TypeError 발생 검증
+    - 버퍼 초과 readUint16: 0 반환, errors 배열에 READ_OVERFLOW 기록 검증
+    - 버퍼 초과 readUint32: 0 반환, errors 배열에 READ_OVERFLOW 기록 검증
+    - 버퍼 초과 readString: 빈 문자열 반환, errors 기록 검증
+    - 버퍼 초과 readBytes: 빈 Uint8Array 반환, errors 기록 검증
+    - 초과 읽기 시 offset 변화 없음 검증
+    - 빈 ArrayBuffer(byteLength=0): remaining()=0, hasRemaining(1)=false 검증
+    - readBytes(0): 빈 Uint8Array, offset 변화 없음 검증
+    - readString(0): 빈 문자열, offset 변화 없음 검증
+    - startOffset > buffer 길이: remaining()=0, errors에 INVALID_START_OFFSET 기록 검증
+    - startOffset 음수: 0으로 보정, errors 기록 검증
+  - 완료 조건: Suite D의 11개 테스트 케이스 전체 PASS
+
+- [ ] **T010** 🔒 전체 단위 테스트 실행 및 커버리지 검증
+  - 파일: `viewer/tests/unit/ParseContext.test.js`, `viewer/src/data/dicomParser/ParseContext.js`
+  - 세부 내용:
+    - `npx vitest run tests/unit/ParseContext.test.js` 전체 실행, 모든 테스트 PASS 확인
+    - `npm run test:coverage` 실행 후 ParseContext.js 커버리지 90% 이상 달성 확인
+    - 실패하는 테스트 케이스가 있으면 관련 구현 코드(T003~T005) 수정 후 재검증
+    - 테스트 간 독립성 확인: 각 테스트가 다른 테스트의 side-effect에 영향받지 않는지 검증
+  - 완료 조건: 총 30개 테스트 케이스 전체 PASS, ParseContext.js 커버리지 90% 이상
 
 ---
-## Phase 4: User Story 2 — 미지원 전송 구문 거부 (Priority: P1)
 
-- **Goal**: 시스템에서 지원하지 않는 전송 구문 UID(압축 인코딩, 존재하지 않는 UID)가 입력되면 PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX 에러를 발생시키고 false를 반환한다.
-- **Independent Test**: 지원하지 않는 UID(예: JPEG Lossless 1.2.840.10008.1.2.4.70)와 임의의 존재하지 않는 UID를 전달하여 false 반환 및 에러 코드 발생을 확인한다.
-- **추적**: US-2 (Spec 01_spec.md), FR-1.2.4
+## Phase 4: Integration & Finalization
 
-- [ ] **T009** 🔀 [US2] 미지원 UID 입력 시 false 반환 및 에러 핸들러 호출 검증
-  - 파일: `viewer/src/data/dicomParser/validateTransferSyntax.js`
+- [ ] **T011** 🔒 기존 파서 모듈과의 회귀 테스트 (metaGroupParser, metadataParser)
+  - 파일: `viewer/src/data/dicomParser/metaGroupParser.js`, `viewer/src/data/dicomParser/metadataParser.js`
+  - 관련 요구사항: NFR-003, 전체 FR
   - 세부 내용:
-    - 입력 1: `'1.2.840.10008.1.2.4.70'` (JPEG Lossless 압축 전송 구문)
-    - 입력 2: `'1.2.3.4.5'` (임의의 존재하지 않는 UID)
-    - 기대 결과: 모두 false 반환, handleParseError(PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX) 호출
-    - 수동 검증으로 false 반환 및 에러 핸들러 동작 확인
-  - 완료 조건:
-    - 미지원 UID 입력 시 false 반환 확인
-    - handleParseError가 PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX 코드로 호출됨
-    - 예외(throw) 발생 없이 boolean 반환 보장
+    - metaGroupParser.js에서 createParseContext() 호출 시 보강된 로직(경계 보호, startOffset 검증)이 정상 동작하는지 확인
+    - metadataParser.js에서 createParseContext() 호출 시 동일하게 정상 동작하는지 확인
+    - 기존 파서 테스트 스위트(존재 시) 전체 실행하여 회귀 없음 확인
+    - errors 배열 기록 방식 변경으로 인해 호출처에서 errors 접근 시 문제 없는지 확인
+    - 실제 DICOM 파일 샘플(Explicit VR LE, Implicit VR LE)로 end-to-end 파싱 동작 확인
+  - 완료 조건: metaGroupParser, metadataParser 기존 동작에 영향 없음, 파싱 결과 동일
 
-- [ ] **T010** 🔒 [US2] US2 단위 테스트 작성 (TC-3.3.4, TC-3.3.7)
-  - 파일: `viewer/tests/unit.test.js`
+- [ ] **T012** 🔒 코드 품질 검사 및 문서 최종 검증
+  - 파일: `viewer/src/data/dicomParser/ParseContext.js`, `viewer/tests/unit/ParseContext.test.js`
   - 세부 내용:
-    - TC-3.3.4: 압축 전송 구문 (`'1.2.840.10008.1.2.4.70'`) -> false, 에러 핸들러 호출 확인
-    - TC-3.3.7: 존재하지 않는 UID (`'1.2.3.4.5'`) -> false, 에러 핸들러 호출 확인
-    - handleParseError 호출 여부는 mock 함수(vi.fn())를 사용하여 검증
-    - describe 블록: `'validateTransferSyntax - 미지원 전송 구문 거부'`
-  - 완료 조건:
-    - TC-3.3.4, TC-3.3.7 모두 PASS
-    - mock 에러 핸들러가 각 테스트에서 1회씩 호출됨을 검증
+    - `npm run lint` 실행: ESLint 에러/경고 0건 확인
+    - `npm run format` 실행: Prettier 포맷팅 적용
+    - JSDoc 주석이 실제 동작과 일치하는지 최종 리뷰 (@throws, @typedef, @param, @returns)
+    - 구현된 코드가 02_plan.md의 Key Technical Decisions 4가지와 일치하는지 확인
+    - 복잡도 추적 항목(CT-001~003)이 적절히 처리되었는지 확인
+  - 완료 조건: lint 에러 0건, format 통과, JSDoc 정합성 확인
+
+- [ ] **T013** 🔒 git commit 및 push
+  - 파일: 변경된 모든 파일
+  - 세부 내용:
+    - `git add` 후 커밋 메시지 작성: `[PLAYG-1823] createParseContext() 버퍼 경계 보호 및 startOffset 검증 로직 추가`
+    - 원격 브랜치 `feature/PLAYG-1823-parse-context-factory`에 push
+    - PR 생성 시 변경사항 요약 포함
+  - 완료 조건: 원격 브랜치 push 완료
 
 ---
-## Phase 5: User Story 3 — null/빈값 입력 방어 (Priority: P1)
 
-- **Goal**: 전송 구문 UID가 null, undefined, 빈 문자열인 경우 PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX 에러를 발생시키고 false를 반환하여 안전 등급 Class A 요구사항을 충족한다.
-- **Independent Test**: null, undefined, 빈 문자열을 각각 전달하여 false 반환 및 에러 처리를 확인한다.
-- **추적**: US-3 (Spec 01_spec.md), FR-1.2.2, NFR-001 (IEC 62304 Class A)
-
-- [ ] **T011** 🔀 [US3] null/undefined/빈값 입력 방어 로직 검증
-  - 파일: `viewer/src/data/dicomParser/validateTransferSyntax.js`
-  - 세부 내용:
-    - 입력 1: `null` -> false 반환, handleParseError 호출
-    - 입력 2: `undefined` -> false 반환, handleParseError 호출
-    - 입력 3: `''` (빈 문자열) -> false 반환, handleParseError 호출
-    - 모든 입력에 대해 예외(throw) 발생 없이 명시적 boolean 반환 보장
-    - 수동 검증으로 각 입력별 동작 확인
-  - 완료 조건:
-    - null, undefined, 빈 문자열 모두 false 반환
-    - 각 케이스에서 handleParseError가 호출됨
-    - ParseContext가 변경되지 않고 초기 상태 유지
-
-- [ ] **T012** 🔒 [US3] US3 단위 테스트 작성 (TC-3.3.5, TC-3.3.6, Edge Cases)
-  - 파일: `viewer/tests/unit.test.js`
-  - 세부 내용:
-    - TC-3.3.5: null 입력 -> false, 에러 핸들러 호출
-    - TC-3.3.6: 빈 문자열 입력 -> false, 에러 핸들러 호출
-    - Edge Case EC-001: 선행/후행 공백 포함 UID (`' 1.2.840.10008.1.2.1 '`) -> false (정확 일치 원칙)
-    - Edge Case EC-002: undefined 입력 -> false, 에러 핸들러 호출
-    - handleParseError 호출 여부는 mock(vi.fn())으로 검증
-    - describe 블록: `'validateTransferSyntax - null/빈값 입력 방어'`
-  - 완료 조건:
-    - TC-3.3.5, TC-3.3.6 및 Edge Case 테스트 모두 PASS
-    - 모든 비정상 입력 경로에서 예외 발생 없이 false 반환 검증
-
----
-## Phase 6: Integration & Finalization
-
-- [ ] **T013** 🔒 전체 단위 테스트 실행 및 커버리지 검증
-  - 파일: `viewer/tests/unit.test.js`
-  - 세부 내용:
-    - `cd viewer && npm test` 실행하여 TC-3.3.1 ~ TC-3.3.7 전체 통과 확인
-    - `cd viewer && npm run test:coverage` 실행하여 커버리지 100% 확인 (validateTransferSyntax.js)
-    - 기존 테스트가 새로운 코드에 의해 깨지지 않았는지 확인
-    - ESLint 오류 0건 확인: `cd viewer && npm run lint`
-  - 완료 조건:
-    - TC-3.3.1 ~ TC-3.3.7 전부 PASS
-    - validateTransferSyntax.js 코드 커버리지 100%
-    - ESLint 오류 0건
-    - 기존 테스트 회귀 없음
-
-- [ ] **T014** 🔒 DicomParser 파이프라인 통합 호출 지점 확인
-  - 파일: `viewer/src/data/dicomParser/parseDICOM.js`
-  - 세부 내용:
-    - `parseDICOM()` 함수 내 호출 순서 확인:
-      1. validateMagicByte() 통과 후
-      2. parseMetaGroup()으로 transferSyntaxUID 추출 후
-      3. **validateTransferSyntax(transferSyntaxUID, parseContext) 호출**
-      4. true 시 parseMetadata() 진행, false 시 에러와 함께 조기 반환
-    - validateTransferSyntax()가 false를 반환하면 ParseResult에 에러가 포함된 채 즉시 반환되는지 확인
-    - 본 태스크는 호출 지점 확인 및 인터페이스 계약 검증이며,
-      parseDICOM.js의 실제 수정은 COMP-1(DicomParser) 티켓에서 수행
-  - 추적: FR-1.2.5
-  - 완료 조건:
-    - parseDICOM.js 내 호출 순서가 FR-1.2.5 명세와 일치함
-    - validateTransferSyntax false 반환 시 후속 파싱이 중단됨을 확인
-
-- [ ] **T015** 🔒 문서 정리 및 추적성 매트릭스 업데이트
-  - 파일: `docs/spec-kit/03_tasks.md`, 관련 산출물
-  - 세부 내용:
-    - IEC 62304 Class A 단위 테스트 증거 정리 (테스트 결과 스크린샷 또는 로그)
-    - SRS FR-1.2, SAD COMP-2 추적성 매트릭스 업데이트
-    - Definition of Done 체크리스트 최종 확인:
-      - [x] FR-1.2.1~FR-1.2.5 모든 기능 요구사항 구현 완료
-      - [x] 단위 테스트 TC-3.3.1~TC-3.3.7 전부 통과
-      - [x] Edge Case 시나리오(EC-001~EC-003) 검증 완료
-      - [x] 코드 커버리지 100% 달성
-      - [x] ESLint 오류 0건
-      - [x] IEC 62304 Class A 단위 테스트 증거 문서화 완료
-    - git commit 및 push
-  - 완료 조건:
-    - 추적성 매트릭스에 본 구현 내용이 반영됨
-    - DoD 체크리스트 전체 완료 표시
-    - 원격 브랜치 push 완료
-
----
 ## Dependencies & Execution Order
 
 ```
-T001 (상수/에러코드 확인) → T002 (ParseContext/handleParseError 확인)
-                              ↓
-              T003 (함수 골격) → T004 (configureParseContext) → T005 (에러 처리)
-                                                            ↓
-                +-------------+-------------+-------------+
-                |             |             |             |
-               T006         T007          T009          T011   (병렬 가능: US별 검증)
-                |             |             |             |
-                +------+------+             +------+------+
-                       |                            |
-                      T008                         T010    (US별 단위 테스트)
-                                                    |
-                                                   T012     (US3 테스트 + Edge Cases)
-                                                    |
-                                            T013 (전체 테스트/커버리지)
-                                                    |
-                                            T014 (파이프라인 통합 확인)
-                                                    |
-                                            T015 (문서 정리/DoD)
+T001 → T002
+  ↓
+T003 → T004 → T005  (🔒 순차: 인프라 보완)
+           ↓
+  T006, T007, T008, T009  (🔀 병렬: 독립 테스트 스위트)
+           ↓
+        T010  (🔒 전체 테스트 검증)
+           ↓
+  T011 → T012 → T013  (🔒 순차: 통합 및 마무리)
 ```
-
-**병렬 실행 가능 그룹:**
-- 그룹 A: T006, T007, T009, T011 (US별 수동 검증, 서로 독립)
-- 그룹 B: T008, T010, T012 (US별 단위 테스트, 선행 검증 태스크 완료 후)
-
----
 
 ## Estimated Effort
 
-| Phase                | 태스크 수 | 예상 소요 시간 |
-| -------------------- | --------- | -------------- |
-| Setup                | 2         | 1.0h           |
-| Foundational         | 3         | 1.5h           |
-| US1 (정상 검증)      | 3         | 1.5h           |
-| US2 (미지원 거부)    | 2         | 0.5h           |
-| US3 (null/빈값 방어) | 2         | 0.5h           |
-| Integration          | 3         | 1.0h           |
-| **합계**             | **15**    | **6.0h**       |
+| Phase        | 태스크 수 | 예상 소요 시간 |
+| ------------ | --------- | -------------- |
+| Setup        | 2         | 1.5시간        |
+| Foundational | 3         | 3.0시간        |
+| User Stories | 5         | 4.0시간        |
+| Integration  | 3         | 2.0시간        |
+| **합계**     | **13**    | **10.5시간**   |
 
----
+## 요구사항-태스크 추적 매트릭스
 
-## Traceability Matrix (추적성 매트릭스)
+| 요구사항  | 태스크        | 설명                               |
+| --------- | ------------- | ---------------------------------- |
+| FR-002    | T006          | Explicit VR LE 설정 검증           |
+| FR-003    | T006          | Big Endian 설정 검증               |
+| FR-004    | T006          | Implicit VR LE 설정 검증           |
+| FR-005~09 | T006          | 반환 객체 속성 검증                |
+| FR-010    | T003, T008    | remaining() 로직 보완 및 테스트    |
+| FR-011~13 | T007          | readUint16/32, readInt16 테스트    |
+| FR-014~15 | T007          | readString, readBytes 테스트       |
+| FR-016    | T008          | advance() 테스트                   |
+| FR-017    | T008          | hasRemaining() 테스트              |
+| FR-018    | T007          | DataView 바이트 오더 인자 검증     |
+| FR-019~20 | T006          | null/undefined/알수없는 UID 폴백   |
+| NFR-001   | T005          | O(1) 시간 복잡도 확인              |
+| NFR-002   | T004, T009    | 버퍼 경계 보호 및 테스트           |
+| NFR-003   | T011          | 독립성 및 회귀 테스트              |
+| EC-001    | T006, T009    | 알 수 없는 UID 처리                |
+| EC-002    | T003, T009    | startOffset 초과 검증              |
+| EC-003    | T004, T009    | offset 초과 읽기 안전 처리         |
+| EC-004    | T005, T009    | readBytes(0)/readString(0) 처리     |
+| EC-005    | T005, T009    | 빈 ArrayBuffer 처리                |
 
-| 태스크 | 기능 요구사항       | 사용자 스토리 | 테스트 케이스              |
-| ------ | ------------------- | ------------- | -------------------------- |
-| T001   | FR-1.2.1            | -             | -                          |
-| T002   | FR-1.2.3            | -             | -                          |
-| T003   | FR-1.2.1, FR-1.2.2  | -             | -                          |
-| T004   | FR-1.2.3            | -             | -                          |
-| T005   | FR-1.2.2, FR-1.2.4  | -             | -                          |
-| T006   | FR-1.2.1, FR-1.2.3  | US-1          | TC-3.3.1                   |
-| T007   | FR-1.2.1, FR-1.2.3  | US-1          | TC-3.3.2, TC-3.3.3         |
-| T008   | FR-1.2.3            | US-1          | TC-3.3.1 ~ TC-3.3.3       |
-| T009   | FR-1.2.4            | US-2          | TC-3.3.4, TC-3.3.7        |
-| T010   | FR-1.2.4            | US-2          | TC-3.3.4, TC-3.3.7        |
-| T011   | FR-1.2.2            | US-3          | TC-3.3.5, TC-3.3.6        |
-| T012   | FR-1.2.2            | US-3          | TC-3.3.5, TC-3.3.6, EC-001~EC-002 |
-| T013   | NFR-001, NFR-003    | 전체          | TC-3.3.1 ~ TC-3.3.7       |
-| T014   | FR-1.2.5            | 전체          | -                          |
-| T015   | NFR-003             | 전체          | -                          |
+## Definition of Done 체크리스트
 
----
-
-*문서 종료*
-*티켓*: PLAYG-1822 | *SDS 섹션*: SDS-3.3 | *안전 등급*: IEC 62304 Class A
+- [ ] 모든 FR-001 ~ FR-020 요구사항 구현 완료 (T003~T005)
+- [ ] 단위 테스트 커버리지 90% 이상 (T010)
+- [ ] Edge Case(EC-001 ~ EC-005) 시나리오 검증 완료 (T009)
+- [ ] 코드 리뷰 승인 (T012)
+- [ ] metaGroupParser.js, metadataParser.js와의 연동 테스트 통과 (T011)
