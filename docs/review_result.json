@@ -1,0 +1,55 @@
+{
+  "status": "PASS",
+  "critical_count": 0,
+  "high_count": 0,
+  "issues": [
+    {
+      "id": "ARCH-1",
+      "severity": "MEDIUM",
+      "description": "skipSequence() 함수가 skipUndefinedLengthSequence() 내부에서 호출되지 않아 SDS 5.3 명세와 불일치. skipUndefinedLengthSequence가 자체적으로 depth를 관리하여 기능적 중복 발생.",
+      "fixed": false
+    },
+    {
+      "id": "ARCH-2",
+      "severity": "HIGH",
+      "description": "skipUndefinedLengthSequence에서 Explicit VR 모드 시 VR이 SQ가 아닌데도(UC/UN/UR/UT) undefined length이면 depth가 증가하는 버그. DICOM 표준에서 undefined length는 SQ에서만 의미 있음.",
+      "fixed": true
+    },
+    {
+      "id": "SEC-1",
+      "severity": "LOW",
+      "description": "readTagValue DS/IS 파싱 시 멀티밸류 문자열(예: '1.5\\\\1.5')에서 parseFloat가 첫 번째 값만 반환하여 뒤 값이 자동 무시됨. 의도된 동작일 수 있으나 명시적 처리 부재.",
+      "fixed": false
+    },
+    {
+      "id": "SEC-2",
+      "severity": "HIGH",
+      "description": "skipUndefinedLengthSequence에 반복 횟수 제한이 없어, 악의적/손상된 DICOM 파일에서 0바이트 길이 태그가 반복되면 무한 루프 발생 가능 (HAZ-5.2 위반).",
+      "fixed": true
+    },
+    {
+      "id": "PERF-1",
+      "severity": "HIGH",
+      "description": "SEC-2와 동일: skipUndefinedLengthSequence 무한 루프 가능성으로 인한 성능 저하 및 브라우저 응답 불가 위험.",
+      "fixed": true
+    },
+    {
+      "id": "PERF-2",
+      "severity": "LOW",
+      "description": "readTagValue US/SS의 패딩 처리 시 length > 2 체크 후 advance(length-2) 추가 함수 호출 오버헤드. 대부분의 US 태그는 length=2이므로 실질적 영향은 미미함.",
+      "fixed": false
+    },
+    {
+      "id": "CQ-1",
+      "severity": "LOW",
+      "description": "skipUndefinedLengthSequence 내 미사용 tagOffset 변수 선언 (dead code).",
+      "fixed": true
+    },
+    {
+      "id": "CQ-2",
+      "severity": "HIGH",
+      "description": "ARCH-2와 동일: Explicit VR에서 non-SQ VR의 undefined length 시 depth 증가 버그. Implicit VR에서도 VR 확인 없이 depth 증가하던 문제.",
+      "fixed": true
+    }
+  ]
+}
