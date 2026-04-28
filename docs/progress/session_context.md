@@ -1,30 +1,41 @@
-# Session Context - PLAYG-1820
+# Session Context - PLAYG-1821
+
+## 작업일: 2026-04-28
 
 ## 티켓 정보
-- 티켓: PLAYG-1820
-- 명령: !implement
-- 모듈: dicomDictionary.js (SDS-3.1)
+- Ticket: PLAYG-1821
+- 제목: [SDS-3.2] validateMagicByte() 매직바이트 검증
+- 유형: Detailed Design
 
 ## 구현 내역
-### T1: DICTIONARY 누락 태그 보완
-- 00180088(SpacingBetweenSlices), 00181110(DistanceSourceToDetector), 00181111(DistanceSourceToPatient),
-  00181114(EstimatedRadiographicMagnificationFactor), 00181150(ExposureTime), 00181152(Exposure),
-  00181160(FilterType) 7개 태그 추가 -> 총 52개 태그 확보
-- 8개 그룹(0002, 0008, 0010, 0018, 0020, 0028, 7FE0, FFFE) 모두 커버
 
-### T2: DICTIONARY export 확인
-- 기존 코드에 이미 export const DICTIONARY 선언되어 있어 추가 수정 불필요
+### 변경 파일
+1. viewer/src/data/dicomParser/constants.js
+   - MAGIC_TABLE (FW/CFG/DLOG 시그니처 3종) 추가
+   - MAGIC_BYTE_ERRORS (INVALID_MAGIC_BYTE, ERROR_FILE_READ_FAILED, ERROR_FILE_TOO_SMALL) 추가
+   - GENERIC_MAGIC_MIN_SIZE = 4 추가
 
-### T3: 단위 테스트 작성
-- viewer/tests/dicomDictionary.test.js 생성 (48개 테스트 케이스)
-- US-3.1.1: makeTagKey/lookupTag/lookupVR 테스트
-- US-3.1.2: TRANSFER_SYNTAX/SUPPORTED_TRANSFER_SYNTAXES 테스트
-- US-3.1.3: VR_CATEGORY/EXTENDED_LENGTH_VR 테스트
-- US-3.1.4: DICTIONARY 완전성 및 키 형식 검증 테스트
+2. viewer/src/data/dicomParser/validateMagicByte.js
+   - 기존 validateMagicByte(DICOM) 유지
+   - validateGenericMagicByte(buffer) 함수 추가
+   - 반환값: { valid, fileType, errorCode, matchedEntry }
 
-### T4: 전체 빌드 및 테스트
-- vitest: 69개 테스트 전체 통과 (기존 21 + 신규 48)
-- vite build: 정상 완료
+3. viewer/src/data/dicomParser/index.js
+   - validateGenericMagicByte export 추가
 
-## 트러블슈팅
-- 특이사항 없음. 기존 코드 품질 양호하여 추가 보완만으로 완료.
+4. viewer/tests/unit.test.js
+   - MAGIC_TABLE 상수 테스트 4건
+   - MAGIC_BYTE_ERRORS / GENERIC_MAGIC_MIN_SIZE 테스트 2건
+   - validateGenericMagicByte 정상/비정상/경계값 테스트 12건
+   - 총 39개 테스트 통과 (기존 21 + 신규 18)
+
+### 테스트 결과
+- 39개 테스트 전체 통과
+- 빌드 성공 (19 modules, bundle.js 21.19 kB)
+
+### 트러블슈팅
+- 없음. 기존 DICOM 파이프라인에 영향 없이 범용 검증 함수를 독립적으로 추가함.
+
+## 다음 세션을 위한 메모
+- parseDICOM.js 파이프라인에 validateGenericMagicByte를 통합하려면 추가 작업 필요
+- MAGIC_TABLE에 새로운 파일 타입 추가 시 constants.js만 수정하면 됨

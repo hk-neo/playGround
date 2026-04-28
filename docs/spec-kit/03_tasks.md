@@ -1,9 +1,8 @@
-# [SDS-3.1] DICOM 데이터 사전 모듈(dicomDictionary.js) 태스크 목록
+# 03_tasks.md - validateMagicByte() SDS-3.2 태스크 목록
 
 ## 태스크
 
-- [x] T1: DICTIONARY 누락 태그 보완 (FFFE0000 추가, 그룹별 필수 태그 약 50개 확보)
-- [x] T2: DICTIONARY 내부 객체를 export하여 테스트에서 접근 가능하도록 수정
-- [x] T3: dicomDictionary 단위 테스트 파일 작성 (US-3.1.1 ~ US-3.1.4 전체 커버)
-- [x] T4: 전체 빌드 및 테스트 통과 확인
-- [x] T5: 문서 업데이트 및 최종 검증
+- [x] T1: constants.js에 매직바이트 테이블(MAGIC_TABLE) 및 관련 상수/에러코드 추가
+- [x] T2: validateMagicByte.js에 validateGenericMagicByte() 함수 구현
+- [x] T3: 단위 테스트 작성 - 정상/비정상/경계값 케이스
+- [x] T4: 기존 테스트 통과 확인 및 최종 빌드 검증

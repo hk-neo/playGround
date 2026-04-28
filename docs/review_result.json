@@ -4,25 +4,70 @@
   "high_count": 0,
   "issues": [
     {
-      "id": "CQ-1",
+      "id": "ARCH-1",
       "severity": "MEDIUM",
-      "description": "expectDefaultValues 헬퍼 함수 JSDoc에 '28개 속성'으로 기재되어 있으나 실제는 27개 속성 검증. TC-1.2.1 테스트 설명에도 '28개 속성'으로 표기됨. 주석-구현 불일치.",
-      "location": "viewer/tests/unit.test.js L169 (expectDefaultValues JSDoc), L187 (TC-1.2.1 설명)",
-      "fixed": false
-    },
-    {
-      "id": "CQ-2",
-      "severity": "MEDIUM",
-      "description": "ParseResult.js(createParseResult)에 null/undefined 방어 로직(overrides ?? {})이 누락됨. DICOMMetadata.js에만 추가되어 일관성 부족. createParseResult(null) 호출 시 TypeError 발생 가능.",
-      "location": "viewer/src/types/ParseResult.js L45 (...overrides Spread)",
+      "category": "Architect",
+      "description": "validateMagicByte.js의 import 문이 동일 모듈(constants.js)을 2줄로 분리 import하고 있음. 단일 import 문으로 병합하면 결합도 관점에서 더 깔끔함.",
+      "file": "viewer/src/data/dicomParser/validateMagicByte.js",
+      "line": 12,
       "fixed": true
     },
     {
-      "id": "CQ-3",
+      "id": "CQ-1",
+      "severity": "MEDIUM",
+      "category": "CodeQuality",
+      "description": "validateGenericMagicByte() 내부에 headerLen=4 매직 넘버가 하드코딩되어 있음. GENERIC_MAGIC_MIN_SIZE 상수를 재사용하거나 MAX_HEADER_READ_LENGTH 등의 명명된 상수로 추출 필요.",
+      "file": "viewer/src/data/dicomParser/validateMagicByte.js",
+      "line": 68,
+      "fixed": true
+    },
+    {
+      "id": "CQ-2",
       "severity": "LOW",
-      "description": "expectDefaultValues 내부 주석에 '문자열 9개 (빈 문자열)'로 기재되었으나 실제 검증하는 문자열 속성은 12개임. 주석-구현 불일치.",
-      "location": "viewer/tests/unit.test.js L171",
-      "fixed": false
+      "category": "CodeQuality",
+      "description": "import 문 2줄 분리 (ARCH-1과 동일 원인). 동일 모듈에서 여러 식별자를 import할 때는 단일 import {} 문으로 병합하는 것이 권장됨.",
+      "file": "viewer/src/data/dicomParser/validateMagicByte.js",
+      "line": 12,
+      "fixed": true
+    },
+    {
+      "id": "PERF-1",
+      "severity": "LOW",
+      "category": "Performance",
+      "description": "headerLen=4와 GENERIC_MAGIC_MIN_SIZE=4가 동일 값이지만 별도로 정의/사용되어 의미가 혼재됨. CQ-1 수정으로 함께 해결됨.",
+      "file": "viewer/src/data/dicomParser/validateMagicByte.js",
+      "line": 68,
+      "fixed": true
     }
-  ]
+  ],
+  "review_summary": {
+    "architect": {
+      "critical": 0,
+      "high": 0,
+      "medium": 1,
+      "low": 0,
+      "note": "SOLID/레이어 분리/결합도 모두 양호. import 분리만 경미한 이슈."
+    },
+    "security": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "note": "입력 검증, 버퍼 오버플로우 방지, 에러 메시지 노출 없음 - 이상 없음."
+    },
+    "performance": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 1,
+      "note": "MAGIC_TABLE 순차 비교 O(12)로 성능 이슈 없음. 매직 넘버 중복만 경미한 이슈."
+    },
+    "code_quality": {
+      "critical": 0,
+      "high": 0,
+      "medium": 1,
+      "low": 1,
+      "note": "네이밍/에러 처리/테스트 품질 양호. headerLen 매직 넘버와 import 분리만 수정."
+    }
+  }
 }

@@ -79,10 +79,35 @@ export const PIXEL_DATA_TAG = Object.freeze({ group: 0x7FE0, element: 0x0010 });
 // ============================================================
 
 /**
- * DICOM 파싱 에러 코드 사전 (7종)
- * enum 대신 객체 리터럴 사용 - IEC 62304 Class A 단순성 준수
- * @constant {ReadonlyObject}
- * @trace FR-5.1, FR-CST-10, HAZ-1.1~HAZ-1.4, HAZ-5.2
+ * 범용 매직바이트 검증 테이블 (SDS-3.2)
+ * 파일 헤더 오프셋 0x00에서 비교할 시그니처 정의
+ * @constant {Array<Object>}
+ */
+export const MAGIC_TABLE = [
+  { bytes: [0x50, 0x4C, 0x59, 0x47], type: 'FW', label: 'FW 바이너리', offset: 0 },
+  { bytes: [0x43, 0x46, 0x47], type: 'CFG', label: '설정 파일', offset: 0 },
+  { bytes: [0x44, 0x4C, 0x47], type: 'DLOG', label: '데이터 로그', offset: 0 },
+];
+
+/**
+ * 범용 매직바이트 검증 에러 코드 (SDS-3.2)
+ * @constant {Object}
+ */
+export const MAGIC_BYTE_ERRORS = {
+  INVALID_MAGIC_BYTE: 'INVALID_MAGIC_BYTE',
+  ERROR_FILE_READ_FAILED: 'ERROR_FILE_READ_FAILED',
+  ERROR_FILE_TOO_SMALL: 'ERROR_FILE_TOO_SMALL',
+};
+
+/**
+ * 범용 매직바이트 검증 최소 파일 크기 (SDS-3.2)
+ * @constant {number}
+ */
+export const GENERIC_MAGIC_MIN_SIZE = 4;
+
+/**
+ * DICOM 파싱 에러 코드 (FR-1.5, HAZ-1.1, HAZ-5.2)
+ * @constant {Object}
  */
 export const ERROR_CODES = {
   CBV_000: 'CBV_000',
