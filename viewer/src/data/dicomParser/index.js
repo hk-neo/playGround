@@ -6,7 +6,7 @@
  */
 
 export { parseDICOM } from './parseDICOM.js';
-export { validateMagicByte } from './validateMagicByte.js';
+export { validateMagicByte, validateGenericMagicByte } from './validateMagicByte.js';
 export { validateTransferSyntax } from './validateTransferSyntax.js';
 export { parseMetadata } from './metadataParser.js';
 export { parsePixelData } from './pixelDataParser.js';

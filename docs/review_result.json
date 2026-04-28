@@ -5,66 +5,81 @@
   "issues": [
     {
       "id": "ARCH-1",
-      "severity": "MEDIUM",
-      "description": "advance() 메서드에 음수 amount 방어 없음 - offset이 음수가 되면 이후 hasRemaining 로직이 우회될 수 있음",
+      "severity": "HIGH",
+      "category": "Architect",
+      "file": "viewer/src/data/dicomParser/validateTransferSyntax.js",
+      "line": 57,
+      "description": "typeof transferSyntaxUID !== string 방어 로직 누락. IEC 62304 Class A에서 모든 실행 경로의 명시적 처리 요구.",
       "fixed": true,
-      "fix_detail": "advance() 내부에 typeof/음수 검증 추가"
+      "fix_detail": "이전 리뷰에서 typeof 체크 추가됨. 이번 리뷰에서 확인 완료."
     },
     {
       "id": "ARCH-2",
-      "severity": "LOW",
-      "description": "readString/readBytes에 length 음수 전달 시 hasRemaining(-n)이 true가 되어 잘못된 동작 가능",
+      "severity": "MEDIUM",
+      "category": "Architect",
+      "file": "viewer/src/data/dicomParser/validateTransferSyntax.js",
+      "line": 76,
+      "description": "_recordError()가 parseResult.errors에 문자열만 push. parseDICOM.js에서는 {userMessage, debugInfo, errorCode, severity} 객체 포맷 사용. 포맷 불일치로 인해 직접 호출 시 에러 항목 구조가 다름.",
       "fixed": true,
-      "fix_detail": "readString/readBytes 선두에 typeof/음수 검증 추가"
+      "fix_detail": "_recordError()를 수정하여 handleParseError()와 동일한 객체 포맷({userMessage, debugInfo, errorCode, severity})으로 push하도록 변경."
     },
     {
       "id": "ARCH-3",
       "severity": "LOW",
-      "description": "startOffset이 NaN인 경우 typeof NaN === \"number\" 통과 후 NaN 비교가 항상 false여서 offset이 NaN으로 설정됨",
-      "fixed": true,
-      "fix_detail": "Number.isFinite() 검증 추가"
+      "category": "Architect",
+      "file": "viewer/src/data/dicomParser/parseDICOM.js",
+      "line": 74,
+      "description": "parseDICOM.js에서 validateTransferSyntax(transferSyntaxUID) 호출 시 parseContext, parseResult 인자 미전달. COMP-1 티켓에서 통합 예정.",
+      "fixed": false
     },
     {
       "id": "SEC-1",
       "severity": "LOW",
-      "description": "errors 배열에 offset/requested/available 등 파일 내부 구조 정보 포함 - 외부 전송 시 정보 노출 위험",
-      "fixed": false,
-      "fix_detail": "내부 디버깅용이므로 현재 위험도 낮음. 외부 API 응답에 errors 미포함 가이드 필요"
-    },
-    {
-      "id": "SEC-2",
-      "severity": "LOW",
-      "description": "readString이 String.fromCharCode로 Latin-1 디코딩 - 비ASCII 환자명 등에서 한계 존재",
-      "fixed": false,
-      "fix_detail": "DICOM 문자열은 ASCII/Latin-1 기반이므로 현재 스펙 범위 내 정상 동작"
+      "category": "Security",
+      "file": "viewer/src/data/dicomParser/validateTransferSyntax.js",
+      "line": 1,
+      "description": "configureParseContext()가 외부 전달 parseContext 객체를 직접 mutation. 내부 파이프라인에서만 사용되어 현실적 위험 없음.",
+      "fixed": false
     },
     {
       "id": "PERF-1",
-      "severity": "MEDIUM",
-      "description": "readString에서 String.fromCharCode.apply(null, bytes) 사용 - 대형 배열 시 call stack overflow 가능",
-      "fixed": false,
-      "fix_detail": "DICOM 문자열 태그는 최대 256바이트 수준이므로 실제 위험 낮음. 향후 TextDecoder 전환 권장"
+      "severity": "LOW",
+      "category": "Performance",
+      "file": "viewer/src/data/dicomParser/validateTransferSyntax.js",
+      "line": 60,
+      "description": "SUPPORTED_TRANSFER_SYNTAXES는 Set(3개 요소)으로 O(1) 조회. NFR-002(1ms 이내) 충족.",
+      "fixed": false
     },
     {
       "id": "CQ-1",
       "severity": "HIGH",
-      "description": "advance() 음수/과도한 값 방어 없음 - offset 음수 시 hasRemaining 로직 우회로 잘못된 메모리 접근 가능",
+      "category": "CodeQuality",
+      "file": "viewer/tests/unit.test.js",
+      "line": 78,
+      "description": "SDS-3.3에서 요구하는 TC-3.3.1~TC-3.3.7 및 Edge Case 테스트가 누락됨. 기존 테스트는 단일 인자 호출만 검증.",
       "fixed": true,
-      "fix_detail": "advance() 내부에 typeof/음수 검증 추가"
+      "fix_detail": "TC-3.3.1~TC-3.3.7, EC-001(공백 포함 UID), EC-002(undefined), 비문자열 타입, parseResult 미전달 케이스 등 11개 테스트 추가. 전체 32개 테스트 통과."
     },
     {
       "id": "CQ-2",
       "severity": "MEDIUM",
-      "description": "readString/readBytes 음수 length 미처리 - new Uint8Array(buffer, offset, -1) 시 RangeError 발생",
-      "fixed": true,
-      "fix_detail": "readString/readBytes 선두에 typeof length/length <= 0 검증 추가"
-    },
-    {
-      "id": "CQ-3",
-      "severity": "LOW",
-      "description": "startOffset NaN 케이스 미처리 - typeof NaN === \"number\" 통과",
-      "fixed": true,
-      "fix_detail": "Number.isFinite() 검증 추가로 NaN/Infinity 차단"
+      "category": "CodeQuality",
+      "file": "viewer/src/data/dicomParser/validateTransferSyntax.js",
+      "line": 69,
+      "description": "configureParseContext()가 parseContext에 isExplicitVR/isLittleEndian 속성이 존재하는지 검증하지 않음. 잘못된 객체 전달 시 에러 없이 무시됨.",
+      "fixed": false
     }
-  ]
+  ],
+  "review_summary": {
+    "architect": "ARCH-1(typeof 방어) 이전 수정 확인 완료. ARCH-2(errors 포맷 불일치) 이번 리뷰에서 수정. ARCH-3(parseDICOM 통합)은 COMP-1 티켓으로 이관.",
+    "security": "SEC-1(configureParseContext mutation) LOW. 내부 파이프라인에서만 사용되어 위험 없음.",
+    "performance": "PERF-1 LOW. Set O(1) 조회로 성능 이슈 없음. NFR-002 충족.",
+    "code_quality": "CQ-1 SDS 명세 기반 TC-3.3.1~TC-3.3.7 테스트 11개 추가 완료(32개 전체 통과). CQ-2 ParseContext 속성 검증은 향후 개선 권장."
+  },
+  "test_result": {
+    "total": 32,
+    "passed": 32,
+    "failed": 0,
+    "status": "전체 통과"
+  }
 }
