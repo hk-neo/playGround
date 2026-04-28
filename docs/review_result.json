@@ -1,0 +1,70 @@
+{
+  "status": "PASS",
+  "critical_count": 0,
+  "high_count": 0,
+  "issues": [
+    {
+      "id": "ARCH-1",
+      "severity": "MEDIUM",
+      "description": "advance() 메서드에 음수 amount 방어 없음 - offset이 음수가 되면 이후 hasRemaining 로직이 우회될 수 있음",
+      "fixed": true,
+      "fix_detail": "advance() 내부에 typeof/음수 검증 추가"
+    },
+    {
+      "id": "ARCH-2",
+      "severity": "LOW",
+      "description": "readString/readBytes에 length 음수 전달 시 hasRemaining(-n)이 true가 되어 잘못된 동작 가능",
+      "fixed": true,
+      "fix_detail": "readString/readBytes 선두에 typeof/음수 검증 추가"
+    },
+    {
+      "id": "ARCH-3",
+      "severity": "LOW",
+      "description": "startOffset이 NaN인 경우 typeof NaN === \"number\" 통과 후 NaN 비교가 항상 false여서 offset이 NaN으로 설정됨",
+      "fixed": true,
+      "fix_detail": "Number.isFinite() 검증 추가"
+    },
+    {
+      "id": "SEC-1",
+      "severity": "LOW",
+      "description": "errors 배열에 offset/requested/available 등 파일 내부 구조 정보 포함 - 외부 전송 시 정보 노출 위험",
+      "fixed": false,
+      "fix_detail": "내부 디버깅용이므로 현재 위험도 낮음. 외부 API 응답에 errors 미포함 가이드 필요"
+    },
+    {
+      "id": "SEC-2",
+      "severity": "LOW",
+      "description": "readString이 String.fromCharCode로 Latin-1 디코딩 - 비ASCII 환자명 등에서 한계 존재",
+      "fixed": false,
+      "fix_detail": "DICOM 문자열은 ASCII/Latin-1 기반이므로 현재 스펙 범위 내 정상 동작"
+    },
+    {
+      "id": "PERF-1",
+      "severity": "MEDIUM",
+      "description": "readString에서 String.fromCharCode.apply(null, bytes) 사용 - 대형 배열 시 call stack overflow 가능",
+      "fixed": false,
+      "fix_detail": "DICOM 문자열 태그는 최대 256바이트 수준이므로 실제 위험 낮음. 향후 TextDecoder 전환 권장"
+    },
+    {
+      "id": "CQ-1",
+      "severity": "HIGH",
+      "description": "advance() 음수/과도한 값 방어 없음 - offset 음수 시 hasRemaining 로직 우회로 잘못된 메모리 접근 가능",
+      "fixed": true,
+      "fix_detail": "advance() 내부에 typeof/음수 검증 추가"
+    },
+    {
+      "id": "CQ-2",
+      "severity": "MEDIUM",
+      "description": "readString/readBytes 음수 length 미처리 - new Uint8Array(buffer, offset, -1) 시 RangeError 발생",
+      "fixed": true,
+      "fix_detail": "readString/readBytes 선두에 typeof length/length <= 0 검증 추가"
+    },
+    {
+      "id": "CQ-3",
+      "severity": "LOW",
+      "description": "startOffset NaN 케이스 미처리 - typeof NaN === \"number\" 통과",
+      "fixed": true,
+      "fix_detail": "Number.isFinite() 검증 추가로 NaN/Infinity 차단"
+    }
+  ]
+}
