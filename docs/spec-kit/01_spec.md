@@ -1,110 +1,168 @@
-# Feature Specification: createParseContext() 파싱컨텍스트 팩토리
+# [PLAYG-1824] readTag() DICOM 태그 읽기 명세서
 
-**Feature Branch**: `PLAYG-1823-parse-context-factory`
-**Status**: Draft | **Date**: 2026-04-28
-**Ticket**: `PLAYG-1823` | **Type**: Detailed Design
-**Input**: 티켓 description (PRD/SRS 문서 없음)
+## 1. 개요
 
----
+### 1.1 티켓 정보
+| 항목 | 내용 |
+|------|------|
+| 티켓 ID | PLAYG-1824 |
+| 제목 | [SDS-3.5] readTag() DICOM 태그 읽기 |
+| 티켓 유형 | Detailed Design |
+| 안전 등급 | IEC 62304 Class A |
 
-## User Scenarios & Testing
+### 1.2 모듈 정보
+| 항목 | 내용 |
+|------|------|
+| 모듈 경로 | viewer/src/data/dicomParser/tagReader.js |
+| 상위 모듈 | metadataParser.js (메타데이터 파서) |
+| 참조 표준 | DICOM PS3.5 (Data Structures and Encoding) |
 
-### User Story 1 — 전송 구문 기반 ParseContext 객체 생성 (Priority: P1) 🎯 MVP
-- **설명**: DICOM 파일 파싱을 시작할 때, 전송 구문(Transfer Syntax) UID를 전달하면 바이트 오더와 VR 모드가 자동으로 설정된 ParseContext 객체를 생성한다.
-- **Why this priority**: ParseContext는 모든 DICOM 파싱 로직의 기반이 되는 컨텍스트 객체로, 이것 없이는 어떤 파싱 작업도 수행할 수 없다.
-- **Independent Test**: 다양한 전송 구문 UID(Explicit VR LE, Implicit VR LE, Big Endian)를 전달하여 반환된 객체의 isExplicitVR, isLittleEndian 속성이 올바른지 단위 테스트로 검증한다.
-- **Acceptance Scenarios**:
-  1. **Given** 유효한 ArrayBuffer와 `1.2.840.10008.1.2.1`(Explicit VR LE) UID가 주어졌을 때, **When** `createParseContext(buffer, uid)`를 호출하면, **Then** 반환 객체의 isExplicitVR=true, isLittleEndian=true이어야 한다.
-  2. **Given** 유효한 ArrayBuffer와 `1.2.840.10008.1.2`(Implicit VR LE) UID가 주어졌을 때, **When** `createParseContext(buffer, uid)`를 호출하면, **Then** 반환 객체의 isExplicitVR=false, isLittleEndian=true이어야 한다.
-  3. **Given** 유효한 ArrayBuffer와 `1.2.840.10008.1.2.2`(Big Endian) UID가 주어졌을 때, **When** `createParseContext(buffer, uid)`를 호출하면, **Then** 반환 객체의 isExplicitVR=true, isLittleEndian=false이어야 한다.
-
-### User Story 2 — 버퍼 읽기 유틸리티 메서드 제공 (Priority: P1) 🎯 MVP
-- **설명**: ParseContext 객체는 버퍼에서 데이터를 읽기 위한 메서드(readUint16, readUint32, readInt16, readString, readBytes)를 제공하며, 읽기 후 offset이 자동으로 전진한다.
-- **Why this priority**: 파서 모듈들이 DICOM 태그의 그룹 번호, 엘리먼트 번호, 길이 등을 읽기 위해 필수적으로 사용하는 핵심 기능이다.
-- **Independent Test**:已知 offset 위치의 버퍼에 특정 바이트 값을 쓰고, 각 read 메서드 호출 후 반환값과 offset 증가량을 단위 테스트로 검증한다.
-- **Acceptance Scenarios**:
-  1. **Given** offset=0이고 버퍼에 Little-Endian으로 `0x0010`이 저장되어 있을 때, **When** `readUint16()`을 호출하면, **Then** 16을 반환하고 offset은 2가 되어야 한다.
-  2. **Given** offset=0이고 버퍼에 `ABCD` 문자열이 저장되어 있을 때, **When** `readString(4)`를 호출하면, **Then** `'ABCD'`를 반환하고 offset은 4가 되어야 한다.
-  3. **Given** offset=0이고 버퍼에 4바이트가 저장되어 있을 때, **When** `readBytes(4)`를 호출하면, **Then** 길이 4의 Uint8Array를 반환하고 offset은 4가 되어야 한다.
-
-### User Story 3 — offset 제어 및 남은 바이트 확인 (Priority: P2)
-- **설명**: ParseContext 객체는 `advance(amount)`, `remaining()`, `hasRemaining(n)` 메서드를 제공하여 파서가 버퍼 탐색 위치를 유연하게 제어할 수 있게 한다.
-- **Why this priority**: 파싱 루프에서 시퀀스_delimiter 처리, 길이 기반 스킵 등에 필수적이지만, 기본 read 메서드보다 보조적인 성격이다.
-- **Independent Test**: startOffset이 10인 상태에서 advance(5), remaining(), hasRemaining() 호출 결과를 단위 테스트로 검증한다.
-- **Acceptance Scenarios**:
-  1. **Given** 100바이트 버퍼와 startOffset=10으로 생성된 ParseContext에서, **When** `remaining()`을 호출하면, **Then** 90을 반환해야 한다.
-  2. **Given** offset=50인 상태에서, **When** `hasRemaining(60)`을 호출하면, **Then** false를 반환해야 한다.
-  3. **Given** offset=10인 상태에서, **When** `advance(20)`을 호출하면, **Then** offset은 30이 되어야 한다.
-
-### User Story 4 — 예외 및 기본값 처리 (Priority: P2)
-- **설명**: 전송 구문 UID가 null/undefined인 경우 기본값(EXPLICIT_VR_LE)으로 동작하며, 파싱 중 발생한 오류는 errors 배열에 수집된다.
-- **Why this priority**: 견고한 파싱을 위해 필수적이지만, 정상 경로가 먼저 검증되어야 한다.
-- **Independent Test**: null/undefined UID를 전달한 경우와 버퍼 경계를 벗어나는 읽기를 시도한 경우의 동작을 단위 테스트로 검증한다.
-- **Acceptance Scenarios**:
-  1. **Given** transferSyntaxUID가 null일 때, **When** `createParseContext(buffer, null)`을 호출하면, **Then** isExplicitVR=true, isLittleEndian=true(기본값)으로 설정되어야 한다.
-  2. **Given** transferSyntaxUID가 undefined일 때, **When** `createParseContext(buffer, undefined)`을 호출하면, **Then** 기본값(EXPLICIT_VR_LE) 설정으로 정상 생성되어야 한다.
-  3. **Given** buffer가 null일 때, **When** `createParseContext(null, uid)`을 호출하면, **Then** DataView 생성 시 TypeError가 발생해야 한다.
-
-### Edge Cases (엣지 케이스)
-- **EC-001**: 알 수 없는 전송 구문 UID가 전달된 경우 — 기본값(EXPLICIT_VR_LE)으로 동작해야 함
-- **EC-002**: startOffset이 버퍼 길이보다 큰 경우 — remaining()이 음수가 아닌 0을 반환해야 함
-- **EC-003**: offset이 버퍼 끝을 넘어 readUint16/readUint32 호출 시 — undefined 반환 또는 errors 배열에 오류 기록
-- **EC-004**: readBytes/readString에 length=0 전달 시 — 빈 Uint8Array/빈 문자열 반환, offset 변화 없음
-- **EC-005**: 빈 ArrayBuffer(길이 0)로 생성 시 — remaining()=0, hasRemaining()=false
+### 1.3 추적성
+- **추적 요구사항**: FR-2.2 (데이터셋 태그 순차 파싱), FR-1.3 (필수 DICOM 태그 검증), FR-2.6 (버퍼 범위 초과 읽기 방지)
+- **추적 Hazard**: HAZ-1.3 (필수 태그 누락), HAZ-5.3 (ArrayBuffer 범위 초과 읽기)
 
 ---
 
-## Requirements
+## 2. 기능 명세
 
-### Functional Requirements (기능 요구사항)
-- **FR-001**: `createParseContext(buffer, transferSyntaxUID, startOffset=0)` 함수를 제공해야 하며, ParseContext 객체를 반환해야 한다.
-- **FR-002**: 전송 구문 UID `1.2.840.10008.1.2`(IMPLICIT_VR_LE)에 대해 isExplicitVR=false, isLittleEndian=true으로 설정해야 한다.
-- **FR-003**: 전송 구문 UID `1.2.840.10008.1.2.2`(BIG_ENDIAN)에 대해 isExplicitVR=true, isLittleEndian=false으로 설정해야 한다.
-- **FR-004**: 전송 구문 UID `1.2.840.10008.1.2.1`(EXPLICIT_VR_LE)에 대해 isExplicitVR=true, isLittleEndian=true으로 설정해야 한다.
-- **FR-005**: 반환 객체는 원본 ArrayBuffer를 `buffer` 속성으로 저장해야 한다.
-- **FR-006**: 반환 객체는 DataView 래퍼를 `dataView` 속성으로 저장해야 한다.
-- **FR-007**: 반환 객체의 `offset` 속성은 startOffset 값으로 초기화되어야 한다 (기본값 0).
-- **FR-008**: 반환 객체는 `transferSyntaxUID` 속성으로 전달받은 UID를 저장해야 한다.
-- **FR-009**: 반환 객체는 빈 배열 `errors[]`를 포함하여 파싱 중 오류/경고를 수집할 수 있어야 한다.
-- **FR-010**: `remaining()` 메서드는 `buffer.byteLength - offset`을 반환해야 한다.
-- **FR-011**: `readUint16()` 메서드는 현재 offset에서 2바이트를 읽어 부호 없는 정수로 반환하고 offset을 2 증가시켜야 한다.
-- **FR-012**: `readUint32()` 메서드는 현재 offset에서 4바이트를 읽어 부호 없는 정수로 반환하고 offset을 4 증가시켜야 한다.
-- **FR-013**: `readInt16()` 메서드는 현재 offset에서 2바이트를 읽어 부호 있는 정수로 반환하고 offset을 2 증가시켜야 한다.
-- **FR-014**: `readString(length)` 메서드는 지정된 길이만큼 문자열을 읽고 offset을 length만큼 증가시켜야 한다.
-- **FR-015**: `readBytes(length)` 메서드는 지정된 길이만큼 Uint8Array를 읽고 offset을 length만큼 증가시켜야 한다.
-- **FR-016**: `advance(amount)` 메서드는 offset을 지정된 양만큼 전진시켜야 한다.
-- **FR-017**: `hasRemaining(n)` 메서드는 버퍼에 n바이트 이상 남아 있는지 boolean으로 반환해야 한다.
-- **FR-018**: 모든 read 메서드는 DataView의 바이트 오더 인자로 isLittleEndian 값을 전달해야 한다.
-- **FR-019**: 전송 구문이 null 또는 undefined인 경우 EXPLICIT_VR_LE 기본값으로 동작해야 한다.
-- **FR-020**: 알 수 없는 전송 구문 UID인 경우 EXPLICIT_VR_LE 기본값으로 동작해야 한다.
+### 2.1 목적
+`readTag()` 함수는 `ParseContext`의 현재 오프셋 위치에서 DICOM 태그 하나를 읽어 태그 번호(Group, Element), VR(Value Representation), 길이, 값을 반환한다.
 
-### Non-Functional Requirements (비기능 요구사항)
-- **NFR-001 (성능)**: ParseContext 생성 및 read 메서드 호출은 O(1) 시간 복잡도를 가져야 한다. DataView 래핑으로 인한 추가 메모리 오버헤드는 최소화해야 한다.
-- **NFR-002 (안정성)**: 버퍼 경계를 벗어나는 읽기 시 애플리케이션이 중단되지 않아야 하며, errors 배열에 오류를 기록하고 안전한 기본값을 반환해야 한다.
-- **NFR-003 (재사용성)**: ParseContext는 순수 데이터 객체로서 외부 상태에 의존하지 않아야 하며, 동일 버퍼에 대해 여러 ParseContext를 독립적으로 생성할 수 있어야 한다.
+### 2.2 지원 전송 구문
+- **Explicit VR**: VR이 바이트 스트림에 명시적으로 인코딩된 형식
+- **Implicit VR**: VR이 사전 정의된 데이터 사전을 통해 조회되는 형식
+- **시퀀스 구분 태그**: FFFE 그룹 태그 처리
+- **Undefined Length**: 0xFFFFFFFF 길이를 갖는 시퀀스 처리
 
-### Key Entities (핵심 데이터 모델)
-- **ParseContext**: DICOM 파싱 세션의 내부 상태를 관리하는 객체 — 핵심 속성: buffer, dataView, offset, isLittleEndian, isExplicitVR, transferSyntaxUID, errors[]
-- **TRANSFER_SYNTAX**: 전송 구문 UID를 상수로 정의한 사전 객체 — 키: IMPLICIT_VR_LE, BIG_ENDIAN, EXPLICIT_VR_LE
+### 2.3 입력 명세
+| 항목 | 타입 | 설명 |
+|------|------|------|
+| ctx | ParseContext | buffer, dataView, offset, isLittleEndian, isExplicitVR 속성 포함 |
 
-### Dependencies (의존성)
-- `data/dicomDictionary.js` — TRANSFER_SYNTAX 상수 임포트
-- 호출처: `metaGroupParser.js`, `metadataParser.js`
-- 추적 가능성: FR-1.2, FR-1.3, US-1, US-2
+### 2.4 출력 명세 (TagReadResult)
+| 항목 | 타입 | 설명 |
+|------|------|------|
+| tag | number[2] | Group(16비트), Element(16비트) 태그 번호 |
+| vr | string | Value Representation (예: US, DS, OW, na) |
+| length | number | 값의 바이트 길이. Undefined Length 시 원본 length 필드값 |
+| value | any | VR별 파싱 결과. 문자열/숫자/바이너리 오프셋/null |
+| offset | number | 태그 시작 오프셋 (디버깅/추적용) |
+| 반환값 | Object | null | TagReadResult 객체. 버퍼 부족 시 null 반환 |
 
 ---
 
-## Success Criteria
+## 3. 처리 로직 흐름도
 
-### Measurable Outcomes (측정 가능한 지표)
-- **SC-001**: 세 가지 전송 구문(Explicit VR LE, Implicit VR LE, Big Endian)에 대해 isExplicitVR, isLittleEndian 값이 100% 정확하게 설정된다.
-- **SC-002**: 모든 read 메서드(readUint16, readUint32, readInt16, readString, readBytes) 호출 후 offset이 정확히 증가한다.
-- **SC-003**: null/undefined/알 수 없는 UID 입력 시 기본값(EXPLICIT_VR_LE)으로 안전하게 폴백한다.
-- **SC-004**: startOffset 매개변수가 정상적으로 반영되어 remaining() 계산이 일치한다.
+### 3.1 메인 흐름 (readTag)
 
-### Definition of Done
-- [ ] 모든 FR-001 ~ FR-020 요구사항 구현 완료
-- [ ] 단위 테스트 커버리지 90% 이상
-- [ ] Edge Case(EC-001 ~ EC-005) 시나리오 검증 완료
-- [ ] 코드 리뷰 승인
-- [ ] metaGroupParser.js, metadataParser.js와의 연동 테스트 통과
+````
+1. 버퍼 잔여 확인
+   - ctx.hasRemaining(4) 확인
+   - 부족 시 null 반환 (FR-2.6)
+
+2. 태그 번호 읽기
+   - ctx.readUint16() x 2 호출
+   - group, element 획득
+
+3. 시퀀스 구분 태그 분기
+   - group === 0xFFFE인 경우
+   - 4바이트 길이 읽고 조기 반환 (vr='na', value=null)
+
+4. VR 결정 분기
+   [Explicit VR 모드] (ctx.isExplicitVR === true)
+     - 2바이트 VR 문자열 읽기
+     - EXTENDED_LENGTH_VR(OB,OW,OF,SQ,UC,UN,UR,UT)인 경우:
+       2바이트 예약 + 4바이트 길이
+     - 일반 VR인 경우:
+       2바이트 길이
+
+   [Implicit VR 모드] (ctx.isExplicitVR === false)
+     - makeTagKey()로 태그 키 생성 후 lookupVR() 조회
+     - 없으면 'UN' 사용
+     - 4바이트 길이 읽기
+
+5. 길이 처리 분기
+   - Undefined Length (0xFFFFFFFF):
+     skipUndefinedLengthSequence() 호출 후 오프셋 전진, value=null
+   - 길이 > 0 and 버퍼 충분:
+     readTagValue(ctx, vr, length) 호출
+   - 길이 > 0 and 버퍼 부족:
+     PARSE_WARN_TRUNCATED_TAG_VALUE 경고 기록, 오프셋를 버퍼 끝으로 이동
+
+6. 결과 반환
+   - { tag, vr, length, value, offset }
+````
+
+---
+
+## 4. 하위 함수 명세
+
+### 4.1 readTagValue(ctx, vr, length)
+
+VR 타입에 따라 값을 적절히 디코딩한다.
+
+| VR | 처리 방식 | 반환 타입 |
+|----|-----------|-----------|
+| US | ctx.readUint16() + 패딩 건너뛰기 | number |
+| SS | ctx.readInt16() + 패딩 건너뛰기 | number |
+| UL | ctx.readUint32() + 패딩 건너뛰기 | number |
+| SL | dataView.getInt32() + 패딩 건너뛰기 | number |
+| FL | dataView.getFloat32() + 패딩 건너뛰기 | number |
+| FD | dataView.getFloat64() + 패딩 건너뛰기 | number |
+| DS | 문자열 읽기 -> trim -> parseFloat | number | string |
+| IS | 문자열 읽기 -> trim -> parseInt | number | string |
+| OW/OB/UN | 오프셋만 전진 (지연 접근) | {_binaryOffset, _binaryLength} |
+| SQ | 오프셋만 전진 (중첩은 readTag에서 처리) | null |
+| 기타(LO,SH,PN,UI 등) | 문자열 읽기 -> trim -> null 제거 | string |
+
+**성능 최적화**: 대용량 바이너리(OB/OW/UN)는 복사하지 않고 오프셋 정보만 반환하여 메모리 사용 최소화 (NFR-3).
+
+### 4.2 skipUndefinedLengthSequence(ctx)
+
+Undefined Length 시퀀스에서 종료 마커를 탐색한다.
+- FFFE,E0DD(Sequence Delimitation Item)를 만나면 depth를 감소시키고 depth=0이면 종료
+- 중첩 시퀀스 진입 시 depth 증가
+- Explicit/Implicit VR 모드 모두 지원
+- 버퍼 끝 도달 시 안전 종료
+
+### 4.3 skipSequence(ctx, depth)
+
+시퀀스 중첩 깊이를 관리한다.
+- MAX_SEQUENCE_DEPTH(10) 초과 시 현재 깊이 유지 (FR-2.5, HAZ-5.2)
+
+---
+
+## 5. 에러 처리 명세
+
+| 조건 | 에러 코드 | 심각도 | 처리 |
+|------|-----------|--------|------|
+| 태그 값이 버퍼 끝에서 잘림 | PARSE_WARN_TRUNCATED_TAG_VALUE | warning | ctx.errors에 경고 추가, 오프셋를 버퍼 끝으로 이동 |
+| 버퍼 잔여 부족 (4바이트 미만) | - | - | null 반환하여 순회 종료 |
+| VR 읽기 중 버퍼 부족 | - | - | null 반환 |
+| 길이 읽기 중 버퍼 부족 | - | - | null 반환 |
+
+**설계 원칙**: readTag() 자체에서는 예외를 throw하지 않고 호출부(metadataParser)의 try-catch로 안전하게 처리 (FR-2.6, NFR-7).
+
+---
+
+## 6. 의존성
+
+| 모듈 | 사용 함수 | 용도 |
+|------|-----------|------|
+| dicomDictionary.js | EXTENDED_LENGTH_VR | 4바이트 길이 VR 판별 |
+| dicomDictionary.js | makeTagKey | 태그 키(GGGGEEEE) 생성 |
+| dicomDictionary.js | lookupVR | Implicit VR 모드에서 VR 조회 |
+| constants.js | MAX_TAG_COUNT | 태그 수 무한 루프 방지 (호출부에서 관리) |
+| constants.js | MAX_SEQUENCE_DEPTH | 시퀀스 중첩 깊이 제한 |
+| ParseContext.js | readUint16/readUint32/readString/advance/hasRemaining | 바이트 단위 버퍼 읽기 |
+
+---
+
+## 7. 설계 제약사항
+
+1. **버퍼 읽기 전 안전 확인**: 모든 DataView 읽기 전 hasRemaining()으로 잔여 바이트 확인 (FR-2.6, HAZ-5.3)
+2. **시퀀스 깊이 제한**: MAX_SEQUENCE_DEPTH(10) 초과 시 파싱 중단 (FR-2.5, HAZ-5.2)
+3. **태그 수 제한**: 호출부(metadataParser)에서 MAX_TAG_COUNT(10000) 관리 (FR-2.4, HAZ-5.1)
+4. **바이트 오더 준수**: ParseContext.isLittleEndian에 따라 모든 정수 읽기 시 엔디안 적용
+5. **픽셀 데이터 지연 접근**: OW/OB/UN 값은 복사하지 않고 오프셋만 반환 (메모리 최적화, NFR-3)
+6. **시퀀스 구분 태그 특수 처리**: FFFE 그룹은 VR/값이 없으므로 vr='na', value=null로 처리
