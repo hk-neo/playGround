@@ -114,6 +114,7 @@ export const ERROR_CODES = {
   PARSE_ERR_INVALID_MAGIC: 'PARSE_ERR_INVALID_MAGIC',
   PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX: 'PARSE_ERR_UNSUPPORTED_TRANSFER_SYNTAX',
   PARSE_ERR_MISSING_REQUIRED_TAG: 'PARSE_ERR_MISSING_REQUIRED_TAG',
+  PARSE_WARN_OPTIONAL_TAG_MISSING: 'PARSE_WARN_OPTIONAL_TAG_MISSING',
   PARSE_ERR_PIXEL_DATA_EXTRACTION: 'PARSE_ERR_PIXEL_DATA_EXTRACTION',
   PARSE_ERR_FILE_READ: 'PARSE_ERR_FILE_READ',
   PARSE_ERR_FILE_TOO_LARGE: 'PARSE_ERR_FILE_TOO_LARGE',
@@ -136,6 +137,7 @@ export const ErrorCodes = ERROR_CODES;
  * @trace FR-1.3, FR-CST-12
  */
 export const PARSE_ERR_MISSING_REQUIRED_TAG = ERROR_CODES.PARSE_ERR_MISSING_REQUIRED_TAG;
+export const PARSE_WARN_OPTIONAL_TAG_MISSING = ERROR_CODES.PARSE_WARN_OPTIONAL_TAG_MISSING;
 
 // ============================================================
 // Phase 3.2: 에러 메시지 맵 (ERROR_MESSAGES)
@@ -162,6 +164,11 @@ export const ERROR_MESSAGES = Object.freeze({
     ko: '필수 DICOM 태그가 누락되었습니다.',
     en: 'Missing required DICOM tag.',
     severity: 'error',
+  },
+  [ERROR_CODES.PARSE_WARN_OPTIONAL_TAG_MISSING]: {
+    ko: '선택 DICOM 태그가 누락되어 기본값을 사용합니다.',
+    en: 'Optional DICOM tag missing, using default value.',
+    severity: 'warning',
   },
   [ERROR_CODES.PARSE_ERR_PIXEL_DATA_EXTRACTION]: {
     ko: '픽셀 데이터 추출에 실패했습니다.',
