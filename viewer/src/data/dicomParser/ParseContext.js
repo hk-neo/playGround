@@ -52,6 +52,9 @@ export function createParseContext(buffer, transferSyntaxUID, startOffset = 0) {
     isLittleEndian = true;
   }
 
+  // TextDecoder 인스턴스 재사용 (성능: 매 호출 시 new 방지)
+  const decoder = new TextDecoder('latin1');
+
   const errors = [];
 
   // startOffset 검증 (EC-002)
@@ -147,30 +150,57 @@ export function createParseContext(buffer, transferSyntaxUID, startOffset = 0) {
     },
 
     /**
-     * Read Int32 at current offset and advance
+     * Read Int32 at current offset and advance (NFR-002: 경계 보호)
      * @returns {number}
      */
     readInt32() {
+      if (!this.hasRemaining(4)) {
+        this.errors.push({
+          type: "READ_OVERFLOW",
+          offset: this.offset,
+          requested: 4,
+          available: this.remaining(),
+        });
+        return 0;
+      }
       const val = this.dataView.getInt32(this.offset, this.isLittleEndian);
       this.offset += 4;
       return val;
     },
 
     /**
-     * Read Float32 at current offset and advance
+     * Read Float32 at current offset and advance (NFR-002: 경계 보호)
      * @returns {number}
      */
     readFloat32() {
+      if (!this.hasRemaining(4)) {
+        this.errors.push({
+          type: "READ_OVERFLOW",
+          offset: this.offset,
+          requested: 4,
+          available: this.remaining(),
+        });
+        return 0;
+      }
       const val = this.dataView.getFloat32(this.offset, this.isLittleEndian);
       this.offset += 4;
       return val;
     },
 
     /**
-     * Read Float64 at current offset and advance
+     * Read Float64 at current offset and advance (NFR-002: 경계 보호)
      * @returns {number}
      */
     readFloat64() {
+      if (!this.hasRemaining(8)) {
+        this.errors.push({
+          type: "READ_OVERFLOW",
+          offset: this.offset,
+          requested: 8,
+          available: this.remaining(),
+        });
+        return 0;
+      }
       const val = this.dataView.getFloat64(this.offset, this.isLittleEndian);
       this.offset += 8;
       return val;
@@ -187,7 +217,7 @@ export function createParseContext(buffer, transferSyntaxUID, startOffset = 0) {
       const bytes = new Uint8Array(this.buffer, this.offset, length);
       this.offset += length;
       // TextDecoder 사용: String.fromCharCode.apply는 긴 배열에서 스택 오버플로우 유발
-      return new TextDecoder('latin1').decode(bytes);
+      return decoder.decode(bytes);
     },
 
     /**

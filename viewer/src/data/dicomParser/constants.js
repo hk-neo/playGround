@@ -208,7 +208,7 @@ export const ERROR_MESSAGES = Object.freeze({
     en: 'Insufficient memory.',
     severity: 'error',
   },
-};
+});
 
 /**
  * 필수/선택 메타데이터 태그 사전

@@ -10,7 +10,6 @@
  */
 
 import { EXTENDED_LENGTH_VR, makeTagKey, lookupVR } from '../dicomDictionary.js';
-import { MAX_SEQUENCE_DEPTH, MAX_TAG_COUNT } from './constants.js';
 
 // ============================================================
 // SDS-3.7: 커스텀 예외 클래스
@@ -69,6 +68,13 @@ export class DicomIllegalArgumentException extends Error {
  * @constant {number}
  */
 const SEQUENCE_DELIMITATION_GROUP = 0xFFFE;
+
+/**
+ * DS/IS 다중값 분할 상한 (SEC-01: 메모리 DoS 방지)
+ * DICOM 표준에서 multiplicity 상한값
+ * @constant {number}
+ */
+const MAX_MULTIPLICITY = 1024;
 
 /**
  * Undefined Length 마커
@@ -256,87 +262,161 @@ export function readTagValue(ctx, vr, length) {
     return null;
   }
 
-  switch (vr) {
-    // --- 정수 VR (DICOM PS3.5 Table 6.2-1) ---
-    case 'US': {
-      const val = ctx.readUint16();
-      if (length > 2) ctx.advance(length - 2);
-      return val;
-    }
-    case 'SS': {
-      const val = ctx.readInt16();
-      if (length > 2) ctx.advance(length - 2);
-      return val;
-    }
-    case 'UL': {
-      const val = ctx.readUint32();
-      if (length > 4) ctx.advance(length - 4);
-      return val;
-    }
-    case 'SL': {
-      const val = ctx.readInt32();
-      if (length > 4) ctx.advance(length - 4);
-      return val;
-    }
+  // T7: 파싱 실패 시 offset 무결성 보장
+  const savedOffset = ctx.offset;
+  try {
+    switch (vr) {
+      // --- 정수 VR (DICOM PS3.5 Table 6.2-1) ---
+      // T1: 버퍼 안전성 가드 추가
+      case 'US': {
+        if (!ctx.hasRemaining(2)) {
+          ctx.advance(length);
+          return null;
+        }
+        const val = ctx.readUint16();
+        if (length > 2) ctx.advance(length - 2);
+        return val;
+      }
+      case 'SS': {
+        if (!ctx.hasRemaining(2)) {
+          ctx.advance(length);
+          return null;
+        }
+        const val = ctx.readInt16();
+        if (length > 2) ctx.advance(length - 2);
+        return val;
+      }
+      case 'UL': {
+        if (!ctx.hasRemaining(4)) {
+          ctx.advance(length);
+          return null;
+        }
+        const val = ctx.readUint32();
+        if (length > 4) ctx.advance(length - 4);
+        return val;
+      }
+      case 'SL': {
+        if (!ctx.hasRemaining(4)) {
+          ctx.advance(length);
+          return null;
+        }
+        const val = ctx.readInt32();
+        if (length > 4) ctx.advance(length - 4);
+        return val;
+      }
 
-    // --- 실수 VR ---
-    case 'FL': {
-      const val = ctx.readFloat32();
-      if (length > 4) ctx.advance(length - 4);
-      return val;
-    }
-    case 'FD': {
-      const val = ctx.readFloat64();
-      if (length > 8) ctx.advance(length - 8);
-      return val;
-    }
+      // --- 실수 VR ---
+      // T2: 버퍼 안전성 가드 추가
+      case 'FL': {
+        if (!ctx.hasRemaining(4)) {
+          ctx.advance(length);
+          return null;
+        }
+        const val = ctx.readFloat32();
+        if (length > 4) ctx.advance(length - 4);
+        return val;
+      }
+      case 'FD': {
+        if (!ctx.hasRemaining(8)) {
+          ctx.advance(length);
+          return null;
+        }
+        const val = ctx.readFloat64();
+        if (length > 8) ctx.advance(length - 8);
+        return val;
+      }
 
-    // --- 문자열 숫자 VR (다중값 지원) ---
-    case 'DS': {
-      const str = ctx.readString(length).trim().replace(/\0/g, "");
-      const num = parseFloat(str);
-      return isNaN(num) ? str : num;
-    }
-    case 'IS': {
-      const str = ctx.readString(length).trim().replace(/\0/g, "");
-      const num = parseInt(str, 10);
-      return isNaN(num) ? str : num;
-    }
+      // --- 문자열 숫자 VR (다중값 지원) ---
+      // T4: DS, IS 다중값(백슬래시 구분) 파싱 지원
+      case 'DS': {
+        const str = normalizeString(ctx.readString(length));
+        if (str === '') return null;
+        if (str.includes('\\')) {
+          const parts = str.split('\\', MAX_MULTIPLICITY + 1);
+          if (parts.length > MAX_MULTIPLICITY) return str;
+          const parsed = parts.map(s => parseFloat(s));
+          return parsed.some(Number.isNaN) ? str : parsed;
+        }
+        const num = parseFloat(str);
+        return Number.isNaN(num) ? str : num;
+      }
+      case 'IS': {
+        const str = normalizeString(ctx.readString(length));
+        if (str === '') return null;
+        if (str.includes('\\')) {
+          const parts = str.split('\\', MAX_MULTIPLICITY + 1);
+          if (parts.length > MAX_MULTIPLICITY) return str;
+          const parsed = parts.map(s => parseInt(s, 10));
+          return parsed.some(Number.isNaN) ? str : parsed;
+        }
+        const num = parseInt(str, 10);
+        return Number.isNaN(num) ? str : num;
+      }
 
-    // --- 속성 태그 VR (DICOM PS3.5 AT) ---
-    case 'AT': {
-      const group = ctx.readUint16();
-      const element = ctx.readUint16();
-      if (length > 4) ctx.advance(length - 4);
-      return makeTagKey(group, element);
-    }
+      // --- 속성 태그 VR (DICOM PS3.5 AT) ---
+      case 'AT': {
+        if (!ctx.hasRemaining(4)) {
+          ctx.advance(length);
+          return null;
+        }
+        const group = ctx.readUint16();
+        const element = ctx.readUint16();
+        if (length > 4) ctx.advance(length - 4);
+        return makeTagKey(group, element);
+      }
 
-    // --- 바이너리 VR (지연 접근) ---
-    case 'OW':
-    case 'OB':
-    case 'UN': {
-      // 지연 접근: 복사하지 않고 오프셋만 반환 (NFR-3)
-      const startOffset = ctx.offset;
-      ctx.advance(length);
-      return { _binaryOffset: startOffset, _binaryLength: length };
-    }
+      // --- 바이너리 VR (지연 접근) ---
+      // T6: 바이너리 VR 안전성 보강
+      case 'OW':
+      case 'OB':
+      case 'UN': {
+        if (!ctx.hasRemaining(length)) {
+          ctx.advance(ctx.remaining());
+          return null;
+        }
+        const startOffset = ctx.offset;
+        ctx.advance(length);
+        return { _binaryOffset: startOffset, _binaryLength: length };
+      }
 
-    // --- 시퀀스 VR ---
-    case 'SQ': {
-      // 시퀀스: 오프셋만 전진 (중첩은 readTag에서 처리)
-      ctx.advance(length);
-      return null;
-    }
+      // --- 시퀀스 VR ---
+      case 'SQ': {
+        ctx.advance(length);
+        return null;
+      }
 
-    // --- 문자열 VR (LO, SH, PN, UI, CS, DA, TM, DT, LT, ST, AE, AS 등) ---
-    default: {
-      // 문자열 VR (LO, SH, PN, UI, CS, DA, TM, DT 등):
-      // 문자열 읽기 -> trim -> null 제거
-      const str = ctx.readString(length);
-      return str.trim().replace(/\0/g, "");
+      // --- 문자열 VR 세분화 (T3) ---
+      case 'CS':
+      case 'DA':
+      case 'LO':
+      case 'SH':
+      case 'PN':
+      case 'UI':
+      case 'TM':
+      case 'DT':
+      case 'LT':
+      case 'ST':
+      case 'AE':
+      case 'AS':
+      default: {
+        return normalizeString(ctx.readString(length));
+      }
     }
+  } catch (e) {
+    // T7: offset 무결성 보장: 파싱 실패해도 안전하게 전진
+    const targetOffset = savedOffset + length;
+    ctx.offset = Math.min(targetOffset, ctx.buffer.byteLength);
+    if (ctx.errors) {
+      ctx.errors.push({
+        code: 'PARSE_WARN_VR_DECODE_FAILED',
+        message: 'VR=' + vr + ' 디코딩 실패(offset=' + savedOffset + ', length=' + length + '): ' + (e.message || 'unknown'),
+        severity: 'warning',
+      });
+    }
+    return null;
   }
 }
+
 
 // ============================================================
 // skipUndefinedLengthSequence() - SDS-3.7 시퀀스 건너뛰기
