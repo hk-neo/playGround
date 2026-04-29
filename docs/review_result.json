@@ -2,41 +2,48 @@
   "status": "PASS",
   "critical_count": 0,
   "high_count": 0,
+  "total_issues": 13,
+  "fixed_issues": 3,
   "issues": [
     {
       "id": "ARCH-1",
       "severity": "HIGH",
-      "description": "readTagValue()에서 SL/FL/FD가 dataView 직접 접근 (readUint16과 불일치)",
-      "fixed": true
+      "category": "Architect",
+      "file": "viewer/src/data/dicomParser/tagReader.js",
+      "description": "readTag()에서 skipUndefinedLengthSequence() 예외를 무조건 무시(catch swallow). DicomIOException은 치명적 오류인데 삼키면 불완전한 DICOM 파일을 정상으로 오인.",
+      "fixed": true,
+      "fix_description": "DicomIOException은 errors 배열에 에러 기록 후 오프셋를 버퍼 끝으로 이동. 기타 예외(IllegalState 등)만 안전하게 무시."
     },
     {
       "id": "ARCH-2",
-      "severity": "HIGH",
-      "description": "AT (Attribute Tag) VR 케이스 누락",
-      "fixed": true
-    },
-    {
-      "id": "ARCH-4",
-      "severity": "HIGH",
-      "description": "ParseContext에 readInt32/readFloat32/readFloat64 메서드 누락",
-      "fixed": true
-    },
-    {
-      "id": "ARCH-5",
-      "severity": "CRITICAL",
-      "description": "metadataParser.js에서 catch(_e)로 에러 완전 무시",
-      "fixed": true
+      "severity": "MEDIUM",
+      "category": "Architect",
+      "file": "viewer/src/data/dicomParser/tagReader.js",
+      "description": "skipUndefinedLengthSequence() 내부에서 stream.offset = startOffset 강제 설정. 호출자의 offset 상태가 예기치 않게 변경될 수 있음. side-effect가 명확하지 않음.",
+      "fixed": false
     },
     {
       "id": "ARCH-3",
       "severity": "MEDIUM",
-      "description": "문자열 VR default 케이스 과도하게 범용적",
+      "category": "Architect",
+      "file": "viewer/src/data/dicomParser/tagReader.js",
+      "description": "MAX_SKIP_DEPTH=16이 tagReader.js에 하드코딩. constants.js의 MAX_SEQUENCE_DEPTH=10과 다른 값. SDS-3.7은 최대 16단계, constants.js는 10단계로 명세 불일치.",
       "fixed": false
     },
     {
-      "id": "ARCH-6",
+      "id": "ARCH-4",
+      "severity": "LOW",
+      "category": "Architect",
+      "file": "viewer/src/data/dicomParser/tagReader.js",
+      "description": "readTagValue() default 분기에서 모든 미확인 VR을 문자열로 처리. 향후 VR별 파싱 규칙 추가 필요 시 리팩토링 필요.",
+      "fixed": false
+    },
+    {
+      "id": "SEC-1",
       "severity": "MEDIUM",
-      "description": "pixelDataParser.js Big Endian 미지원 (TODO-BE)",
+      "category": "Security",
+      "file": "viewer/src/data/dicomParser/tagReader.js",
+      "description": "PARSE_WARN_TRUNCATED_TAG_VALUE 에러 메시지에 태그 hex 값과 remaining 값 포함. errors 배열 내부 저장이므로 직접 노출 위험은 낮음.",
       "fixed": false
     },
     {
@@ -53,9 +60,11 @@
     },
     {
       "id": "SEC-2",
-      "severity": "HIGH",
-      "description": "handleParseError.js 디버그 모드 런타임 환경 변수 의존",
-      "fixed": true
+      "severity": "LOW",
+      "category": "Security",
+      "file": "viewer/src/data/dicomParser/tagReader.js",
+      "description": "VR 문자열 검증이 정규식으로만 수행. readString이 Uint8Array 기반이므로 실제 위험은 매우 낮음.",
+      "fixed": false
     },
     {
       "id": "SEC-3",
@@ -77,105 +86,67 @@
     },
     {
       "id": "PERF-1",
-      "severity": "CRITICAL",
-      "description": "ParseContext.readString()에서 String.fromCharCode.apply 스택 오버플로우 위험",
-      "fixed": true
-    },
-    {
-      "id": "PERF-2",
-      "severity": "HIGH",
-      "description": "문자열 VR 처리 중복 (trim+replace 패턴 3회 반복) -> normalizeString() 헬퍼 추출",
-      "fixed": true
-    },
-    {
-      "id": "PERF-3",
-      "severity": "HIGH",
-      "description": "skipUndefinedLengthSequence() 무제한 O(n) 스캔 -> 64MB 제한 추가",
-      "fixed": true
-    },
-    {
-      "id": "PERF-4",
       "severity": "MEDIUM",
-      "description": "findPixelDataTag() 선형 탐색 O(n) (폴백 경로)",
+      "category": "Performance",
+      "file": "viewer/src/data/dicomParser/tagReader.js",
+      "description": "skipUndefinedLengthSequence() 재귀 호출로 최대 16단계 스택 누적. DICOM 실제 환경에서는 깊은 중첩이 드물어 허용 가능.",
       "fixed": false
     },
     {
-      "id": "PERF-5",
-      "severity": "MEDIUM",
-      "description": "숫자 VR 패딩 스킵 로직 중복",
+      "id": "PERF-2",
+      "severity": "LOW",
+      "category": "Performance",
+      "file": "viewer/src/data/dicomParser/tagReader.js",
+      "description": "DS/IS 파싱에서 trim+replace가 매 호출마다 새 문자열 생성. 현재 요구사항 범위에서 무시 가능.",
       "fixed": false
     },
     {
       "id": "CQ-1",
-      "severity": "CRITICAL",
-      "description": "AT (Attribute Tag) VR 케이스 누락 (ARCH-2와 동일)",
-      "fixed": true
+      "severity": "MEDIUM",
+      "category": "CodeQuality",
+      "file": "viewer/src/data/dicomParser/tagReader.js",
+      "description": "skipUndefinedLengthSequence(ctx, ctx.offset, 0) 호출 시 depth를 항상 0으로 시작. 상위 깊이가 유지되지 않음.",
+      "fixed": false
     },
     {
       "id": "CQ-2",
-      "severity": "CRITICAL",
-      "description": "SL/FL/FD dataView 직접 접근 (ARCH-1과 동일)",
-      "fixed": true
+      "severity": "MEDIUM",
+      "category": "CodeQuality",
+      "file": "viewer/tests/unit/dicomParser/tagReader.test.js",
+      "description": "FL VR 테스트가 placeholder(expect(true).toBe(true))로 구현됨. Float32 디코딩 검증 누락.",
+      "fixed": true,
+      "fix_description": "readTagValue()를 직접 호출하여 Float32 값 검증하는 테스트로 교체"
+    },
+    {
+      "id": "CQ-3",
+      "severity": "MEDIUM",
+      "category": "CodeQuality",
+      "file": "viewer/src/data/dicomParser/tagReader.js",
+      "description": "skipUndefinedLengthSequence() while 루프에 최대 반복 횟수 제한 없음. 손상된 파일로 무한 루프 가능.",
+      "fixed": true,
+      "fix_description": "MAX_SKIP_ITERATIONS(10000) 반복 제한 추가. 초과 시 DicomIllegalStateException 발생."
     },
     {
       "id": "CQ-4",
-      "severity": "HIGH",
-      "description": "advance() 음수 입력 검증 누락 (SEC-1과 동일)",
-      "fixed": true
+      "severity": "LOW",
+      "category": "CodeQuality",
+      "file": "viewer/src/data/dicomParser/tagReader.js",
+      "description": "skipSequence() 함수가 ctx 파라미터를 사용하지 않음. 인터페이스 일관성을 위해 허용.",
+      "fixed": false
     },
     {
       "id": "CQ-5",
-      "severity": "HIGH",
-      "description": "readString() 경계값 검증 누락 (length<=0)",
-      "fixed": true
-    },
-    {
-      "id": "CQ-6",
-      "severity": "HIGH",
-      "description": "readTagValue() vr null/undefined 처리 누락",
-      "fixed": true
-    },
-    {
-      "id": "CQ-7",
-      "severity": "HIGH",
-      "description": "length 0 처리 불일치 -> readTagValue() 진입 시 null 반환",
-      "fixed": true
-    },
-    {
-      "id": "CQ-13",
-      "severity": "HIGH",
-      "description": "readTagValue/ParseContext/PHI 가드 테스트 커버리지 부족 -> 36개 테스트 추가",
-      "fixed": true
-    },
-    {
-      "id": "CQ-8",
-      "severity": "MEDIUM",
-      "description": "PREAMBLE_LENGTH와 MAGIC_BYTE_OFFSET 중복 정의",
-      "fixed": false
-    },
-    {
-      "id": "CQ-9",
-      "severity": "MEDIUM",
-      "description": "ErrorCodes(deprecated)와 ERROR_CODES 혼재",
-      "fixed": false
-    },
-    {
-      "id": "CQ-10",
-      "severity": "MEDIUM",
-      "description": "언더스코어 프리픽스 사용 불일치",
-      "fixed": false
-    },
-    {
-      "id": "CQ-11",
-      "severity": "MEDIUM",
-      "description": "metadataParser.js 에러 무시 (ARCH-5와 동일)",
-      "fixed": true
-    },
-    {
-      "id": "CQ-12",
-      "severity": "MEDIUM",
-      "description": "VR_CATEGORY 미사용 (dead code 가능성)",
+      "severity": "LOW",
+      "category": "CodeQuality",
+      "file": "viewer/src/data/dicomParser/tagReader.js",
+      "description": "SQ case에서 정의된 길이 내부 태그를 파싱하지 않고 건너뜀. metadataParser.js에서 별도 처리되므로 허용.",
       "fixed": false
     }
-  ]
+  ],
+  "review_summary": {
+    "architect": "ARCH-1(HIGH,수정): 예외 삼킴 -> DicomIOException 구분 처리. ARCH-2/3(MEDIUM): offset side-effect, 상수 불일치.",
+    "security": "SEC-1(MEDIUM): 에러 메시지 내부 구조 정보 포함. SEC-2(LOW): VR 검증 충분.",
+    "performance": "PERF-1(MEDIUM): 재귀 스택 누적(허용 범위). PERF-2(LOW): DS 파싱 문자열 생성.",
+    "code_quality": "CQ-1(MEDIUM): depth 초기화. CQ-2(MEDIUM,수정): FL 테스트 보강. CQ-3(MEDIUM,수정): 무한 루프 방지 추가."
+  }
 }
