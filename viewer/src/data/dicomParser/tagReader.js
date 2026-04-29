@@ -10,7 +10,6 @@
  */
 
 import { EXTENDED_LENGTH_VR, makeTagKey, lookupVR } from '../dicomDictionary.js';
-import { MAX_SEQUENCE_DEPTH, MAX_TAG_COUNT } from './constants.js';
 
 // ============================================================
 // SDS-3.7: 커스텀 예외 클래스
@@ -69,6 +68,13 @@ export class DicomIllegalArgumentException extends Error {
  * @constant {number}
  */
 const SEQUENCE_DELIMITATION_GROUP = 0xFFFE;
+
+/**
+ * DS/IS 다중값 분할 상한 (SEC-01: 메모리 DoS 방지)
+ * DICOM 표준에서 multiplicity 상한값
+ * @constant {number}
+ */
+const MAX_MULTIPLICITY = 1024;
 
 /**
  * Undefined Length 마커
@@ -323,27 +329,36 @@ export function readTagValue(ctx, vr, length) {
       // --- 문자열 숫자 VR (다중값 지원) ---
       // T4: DS, IS 다중값(백슬래시 구분) 파싱 지원
       case 'DS': {
-        const str = ctx.readString(length).trim().replace(/\0/g, '');
+        const str = normalizeString(ctx.readString(length));
+        if (str === '') return null;
         if (str.includes('\\')) {
-          const parts = str.split('\\').map(s => parseFloat(s.trim()));
-          return parts.some(isNaN) ? str : parts;
+          const parts = str.split('\\', MAX_MULTIPLICITY + 1);
+          if (parts.length > MAX_MULTIPLICITY) return str;
+          const parsed = parts.map(s => parseFloat(s));
+          return parsed.some(Number.isNaN) ? str : parsed;
         }
         const num = parseFloat(str);
-        return isNaN(num) ? str : num;
+        return Number.isNaN(num) ? str : num;
       }
       case 'IS': {
-        const str = ctx.readString(length).trim().replace(/\0/g, '');
+        const str = normalizeString(ctx.readString(length));
+        if (str === '') return null;
         if (str.includes('\\')) {
-          const parts = str.split('\\').map(s => parseInt(s.trim(), 10));
-          return parts.some(isNaN) ? str : parts;
+          const parts = str.split('\\', MAX_MULTIPLICITY + 1);
+          if (parts.length > MAX_MULTIPLICITY) return str;
+          const parsed = parts.map(s => parseInt(s, 10));
+          return parsed.some(Number.isNaN) ? str : parsed;
         }
         const num = parseInt(str, 10);
-        return isNaN(num) ? str : num;
+        return Number.isNaN(num) ? str : num;
       }
 
       // --- 속성 태그 VR (DICOM PS3.5 AT) ---
-      // T5: AT VR (이미 구현되어 있음, 변경 없음)
       case 'AT': {
+        if (!ctx.hasRemaining(4)) {
+          ctx.advance(length);
+          return null;
+        }
         const group = ctx.readUint16();
         const element = ctx.readUint16();
         if (length > 4) ctx.advance(length - 4);
@@ -382,20 +397,22 @@ export function readTagValue(ctx, vr, length) {
       case 'LT':
       case 'ST':
       case 'AE':
-      case 'AS': {
-        const str = ctx.readString(length);
-        return str.trim().replace(/\0/g, '');
-      }
-
-      // --- 기타 문자열 VR (fallback) ---
+      case 'AS':
       default: {
-        const str = ctx.readString(length);
-        return str.trim().replace(/\0/g, '');
+        return normalizeString(ctx.readString(length));
       }
     }
   } catch (e) {
-    // T7: offset 무결성 보장: 파싱 실패해도 정확히 length만큼 전진
-    ctx.offset = savedOffset + length;
+    // T7: offset 무결성 보장: 파싱 실패해도 안전하게 전진
+    const targetOffset = savedOffset + length;
+    ctx.offset = Math.min(targetOffset, ctx.buffer.byteLength);
+    if (ctx.errors) {
+      ctx.errors.push({
+        code: 'PARSE_WARN_VR_DECODE_FAILED',
+        message: 'VR=' + vr + ' 디코딩 실패(offset=' + savedOffset + ', length=' + length + '): ' + (e.message || 'unknown'),
+        severity: 'warning',
+      });
+    }
     return null;
   }
 }
