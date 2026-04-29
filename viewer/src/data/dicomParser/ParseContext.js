@@ -80,14 +80,47 @@ export function createParseContext(buffer, transferSyntaxUID, startOffset = 0) {
     },
 
     /**
+     * Read Int32 at current offset and advance
+     * @returns {number}
+     */
+    readInt32() {
+      const val = this.dataView.getInt32(this.offset, this.isLittleEndian);
+      this.offset += 4;
+      return val;
+    },
+
+    /**
+     * Read Float32 at current offset and advance
+     * @returns {number}
+     */
+    readFloat32() {
+      const val = this.dataView.getFloat32(this.offset, this.isLittleEndian);
+      this.offset += 4;
+      return val;
+    },
+
+    /**
+     * Read Float64 at current offset and advance
+     * @returns {number}
+     */
+    readFloat64() {
+      const val = this.dataView.getFloat64(this.offset, this.isLittleEndian);
+      this.offset += 8;
+      return val;
+    },
+
+    /**
      * Read string of given length at current offset and advance
+     * Uses TextDecoder for safe handling of long strings (HAZ-5.3).
      * @param {number} length
      * @returns {string}
      */
     readString(length) {
+      if (length <= 0) return '';
       const bytes = new Uint8Array(this.buffer, this.offset, length);
       this.offset += length;
-      return String.fromCharCode.apply(null, bytes);
+      // TextDecoder 사용: String.fromCharCode.apply는 긴 배열에서 스택 오버플로우 유발
+      return new TextDecoder('latin1').decode(bytes);
     },
 
     /**
@@ -96,16 +129,21 @@ export function createParseContext(buffer, transferSyntaxUID, startOffset = 0) {
      * @returns {Uint8Array}
      */
     readBytes(length) {
+      if (length <= 0) return new Uint8Array(0);
       const bytes = new Uint8Array(this.buffer, this.offset, length);
       this.offset += length;
       return bytes;
     },
 
     /**
-     * Advance offset by given amount
+     * Advance offset by given amount.
+     * Negative values are rejected to prevent buffer underflow (HAZ-5.3).
      * @param {number} amount
      */
     advance(amount) {
+      if (amount < 0) {
+        throw new Error('advance() 음수 값 금지: ' + amount);
+      }
       this.offset += amount;
     },
 

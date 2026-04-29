@@ -86,8 +86,15 @@ export function parseMetadata(buffer, preParsedMeta) {
       if (tagDef && result.value !== undefined && result.value !== null) {
         collected[tagDef.field] = result.value;
       }
-    } catch (_e) {
-      // 읽기 실패 시 안전하게 종료
+    } catch (e) {
+      // 태그 읽기 실패 시 에러 기록 후 안전하게 종료
+      if (ctx.errors) {
+        ctx.errors.push({
+          code: 'PARSE_WARN_TAG_READ_FAILED',
+          message: '태그 읽기 실패: ' + (e.message || String(e)),
+          severity: 'warning',
+        });
+      }
       break;
     }
   }
