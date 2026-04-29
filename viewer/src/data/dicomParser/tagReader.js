@@ -227,17 +227,37 @@ export function readTag(ctx) {
 // ============================================================
 
 /**
- * VR 타입에 따라 태그 값을 적절히 디코딩한다.
- * 성능 최적화: 대용량 바이너리(OB/OW/UN)는 복사하지 않고
- * 오프셋 정보만 반환하여 메모리 사용 최소화 (NFR-3).
+ * 문자열 정규화 헬퍼: null 바이트 제거 및 공백 트림
+ * @param {string} str
+ * @returns {string}
+ */
+function normalizeString(str) {
+  return str.trim().replace(/\0/g, '');
+}
+
+/**
+ * 태그 값을 VR에 맞게 읽는다.
+ * DICOM PS3.5 Value Representation별 디코딩 (SDS-3.6)
  *
  * @param {Object} ctx - ParseContext
  * @param {string} vr - Value Representation
- * @param {number} length - 값 길이 (바이트)
- * @returns {string|number|Object|null} 디코딩된 값
+ * @param {number} length - 값 길이
+ * @returns {string|number|number[]|Object|null}
  */
 export function readTagValue(ctx, vr, length) {
+  // 빈 값 처리: 모든 VR에 대해 일관되게 null 반환
+  if (length === 0) {
+    return null;
+  }
+
+  // VR null/undefined 방어 (Implicit VR 모드에서 사전 조회 실패 시)
+  if (!vr) {
+    ctx.advance(length);
+    return null;
+  }
+
   switch (vr) {
+    // --- 정수 VR (DICOM PS3.5 Table 6.2-1) ---
     case 'US': {
       const val = ctx.readUint16();
       if (length > 2) ctx.advance(length - 2);
@@ -254,23 +274,24 @@ export function readTagValue(ctx, vr, length) {
       return val;
     }
     case 'SL': {
-      const val = ctx.dataView.getInt32(ctx.offset, ctx.isLittleEndian);
-      ctx.advance(4);
+      const val = ctx.readInt32();
       if (length > 4) ctx.advance(length - 4);
       return val;
     }
+
+    // --- 실수 VR ---
     case 'FL': {
-      const val = ctx.dataView.getFloat32(ctx.offset, ctx.isLittleEndian);
-      ctx.advance(4);
+      const val = ctx.readFloat32();
       if (length > 4) ctx.advance(length - 4);
       return val;
     }
     case 'FD': {
-      const val = ctx.dataView.getFloat64(ctx.offset, ctx.isLittleEndian);
-      ctx.advance(8);
+      const val = ctx.readFloat64();
       if (length > 8) ctx.advance(length - 8);
       return val;
     }
+
+    // --- 문자열 숫자 VR (다중값 지원) ---
     case 'DS': {
       const str = ctx.readString(length).trim().replace(/\0/g, "");
       const num = parseFloat(str);
@@ -281,6 +302,16 @@ export function readTagValue(ctx, vr, length) {
       const num = parseInt(str, 10);
       return isNaN(num) ? str : num;
     }
+
+    // --- 속성 태그 VR (DICOM PS3.5 AT) ---
+    case 'AT': {
+      const group = ctx.readUint16();
+      const element = ctx.readUint16();
+      if (length > 4) ctx.advance(length - 4);
+      return makeTagKey(group, element);
+    }
+
+    // --- 바이너리 VR (지연 접근) ---
     case 'OW':
     case 'OB':
     case 'UN': {
@@ -289,11 +320,15 @@ export function readTagValue(ctx, vr, length) {
       ctx.advance(length);
       return { _binaryOffset: startOffset, _binaryLength: length };
     }
+
+    // --- 시퀀스 VR ---
     case 'SQ': {
       // 시퀀스: 오프셋만 전진 (중첩은 readTag에서 처리)
       ctx.advance(length);
       return null;
     }
+
+    // --- 문자열 VR (LO, SH, PN, UI, CS, DA, TM, DT, LT, ST, AE, AS 등) ---
     default: {
       // 문자열 VR (LO, SH, PN, UI, CS, DA, TM, DT 등):
       // 문자열 읽기 -> trim -> null 제거

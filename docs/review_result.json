@@ -47,11 +47,41 @@
       "fixed": false
     },
     {
+      "id": "ARCH-7",
+      "severity": "MEDIUM",
+      "description": "tagReader에서 ParseContext 우회하여 dataView 직접 접근",
+      "fixed": true
+    },
+    {
+      "id": "SEC-1",
+      "severity": "CRITICAL",
+      "description": "ParseContext.advance() 음수 값 방지 로직 없음",
+      "fixed": true
+    },
+    {
       "id": "SEC-2",
       "severity": "LOW",
       "category": "Security",
       "file": "viewer/src/data/dicomParser/tagReader.js",
       "description": "VR 문자열 검증이 정규식으로만 수행. readString이 Uint8Array 기반이므로 실제 위험은 매우 낮음.",
+      "fixed": false
+    },
+    {
+      "id": "SEC-3",
+      "severity": "MEDIUM",
+      "description": "태그 길이 검증 부족 (음수/과도한 값)",
+      "fixed": false
+    },
+    {
+      "id": "SEC-4",
+      "severity": "MEDIUM",
+      "description": "잘림 경고에 내부 버퍼 구조 노출",
+      "fixed": false
+    },
+    {
+      "id": "SEC-5",
+      "severity": "MEDIUM",
+      "description": "PHI WeakMap 메모리 덤프 시 노출 가능성",
       "fixed": false
     },
     {
