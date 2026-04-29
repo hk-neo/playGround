@@ -94,26 +94,37 @@ _리스트 파일 예시:_
 - `sds_list.json` - SD 항목 생성용
 - `sad_list.json` - COMP 항목 생성용
 
-
 ---
 
-# 프로젝트 파일 맵핑 (PLAYG-1819 기준)
+# 프로젝트 구조 맵핑 (자동 생성)
 
-## 소스 코드
-- viewer/src/errors/CBVError.js: CBVError 기본 클래스 + 5개 하위 클래스 (ParseError, ValidationError, RenderError, SecurityError, MemoryError)
-- viewer/src/errors/handleParseError.js: CBVError -> ErrorResult 변환 핸들러
-- viewer/src/data/dicomParser/constants.js: ERROR_CODES (12종), ERROR_MESSAGES, METADATA_TAGS, DICOM 파서 상수
-- viewer/src/types/ParseResult.js: ParseResult/ErrorResult 타입 정의 (createParseResult 팩토리)
-- viewer/src/types/DICOMMetadata.js: DICOMMetadata 타입 정의 (createDICOMMetadata 팩토리)
-- viewer/src/data/dicomParser/: DICOM 파서 모듈 (validateMagicByte, validateTransferSyntax, parseDICOM 등)
+## 디렉토리 구조
+- viewer/ - 메인 프로젝트 루트 (Vite + Vitest)
+- viewer/src/data/dicomParser/ - DICOM 파서 모듈
+- viewer/src/data/ - 데이터 레이어
+- viewer/src/types/ - 타입 정의 (DICOMMetadata, ParseResult)
+- viewer/src/errors/ - 에러 처리 (CBVError, handleParseError)
+- viewer/src/styles/ - CSS 스타일
+- viewer/tests/ - 테스트 파일
+- viewer/tests/unit/dicomParser/ - DICOM 파서 단위 테스트
+- viewer/tests/unit/errors/ - 에러 처리 테스트
+- viewer/tests/unit/types/ - 타입 테스트
+- docs/spec-kit/ - 설계 명세 (01_spec.md, 02_plan.md, 03_tasks.md)
+- docs/progress/ - 세션 컨텍스트 (session_context.md)
+- docs/artifacts/ - 산출물 문서 (SRS, SDS, SAD 등)
 
-## 테스트
-- viewer/tests/unit/errors/CBVError.test.js: CBVError 계층 단위 테스트 23개 (T-01~T-23)
-- viewer/tests/unit/errors/Integration.test.js: handleParseError 연동 통합 테스트 11개
-- viewer/tests/unit.test.js: DICOM 파서 기존 단위 테스트 21개
-
-## 문서
-- docs/spec-kit/01_spec.md: CBVError 에러 클래스 계층 제품 명세서
-- docs/spec-kit/02_plan.md: 구현 계획서
-- docs/spec-kit/03_tasks.md: 태스크 분해 (T001~T-INT-02, 전체 완료)
-- docs/progress/session_context.md: 세션 컨텍스트 (작업 이력)
+## 핵심 파일 맵핑
+- viewer/src/data/dicomParser/tagReader.js - readTag(), readTagValue(), skipUndefinedLengthSequence()
+- viewer/src/data/dicomParser/ParseContext.js - createParseContext() 팩토리
+- viewer/src/data/dicomParser/constants.js - 상수 정의 (ERROR_CODES, METADATA_TAGS 등)
+- viewer/src/data/dicomParser/metaGroupParser.js - parseMetaGroup() 메타그룹 파싱
+- viewer/src/data/dicomParser/metadataParser.js - parseMetadata() 전체 메타데이터 파싱
+- viewer/src/data/dicomParser/phiGuard.js - PHI 마스킹 (maskPhiFields)
+- viewer/src/data/dicomParser/validateTransferSyntax.js - 전송 구문 검증
+- viewer/src/data/dicomParser/validateMagicByte.js - 매직 바이트 검증
+- viewer/src/data/dicomParser/pixelDataParser.js - 픽셀 데이터 파싱
+- viewer/src/data/dicomParser/parseDICOM.js - DICOM 파일 파싱 진입점
+- viewer/src/data/dicomParser/index.js - 모듈 인덱스
+- viewer/src/data/dicomDictionary.js - DICOM 데이터 사전 (DICTIONARY, TRANSFER_SYNTAX)
+- viewer/tests/unit.test.js - 통합 단위 테스트
+- viewer/tests/unit/dicomParser/tagReader.test.js - tagReader 전용 단위 테스트 (989 lines)
