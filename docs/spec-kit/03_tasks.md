@@ -16,7 +16,7 @@
 ## Phase 1: Setup (공통 인프라)
 <!-- 모든 다음 단계에 필요한 공통 상수·의존성 검증 -->
 
-- [ ] **T001** 🔒 PIXEL_DATA_TAG 상수 검증 및 의존 모듈 확인
+- [x] **T001** 🔒 PIXEL_DATA_TAG 상수 검증 및 의존 모듈 확인
   - 파일: `viewer/src/data/dicomParser/constants.js`
   - 작업 내용:
     - `PIXEL_DATA_TAG` 상수가 `{ group: 0x7FE0, element: 0x0010 }` 형태로 `Object.freeze` 되어 존재하는지 확인
@@ -33,7 +33,7 @@
     - 기존 구현 대비 변경점 정리 문서화 (하드코딩 상수 -> PIXEL_DATA_TAG import, 루프 조건 `offset < bufferLength - 4` -> `offset + 4 <= bufferLength`)
     - `npm test` 기존 테스트 통과
 
-- [ ] **T002** 🔒 테스트 픽스처 및 헬퍼 유틸리티 생성
+- [x] **T002** 🔒 테스트 픽스처 및 헬퍼 유틸리티 생성
   - 파일: `viewer/tests/unit/fixtures/pixelDataTagBuffer.js` (신규)
   - 작업 내용:
     - `createPixelDataTagBuffer(options)`: 지정한 오프셋에 픽셀 데이터 태그(7FE0,0010)를 배치한 DICOM 버퍼 생성 헬퍼
@@ -56,7 +56,7 @@
 ## Phase 2: Foundational (선행 필수 핵심 구현)
 <!-- CRITICAL: 사용자 스토리 구현 전 반드시 완료해야 할 함수 스켈레톤 및 입력 검증 -->
 
-- [ ] **T003** 🔒 findPixelDataTag() 함수 리팩토링 - 상수 import 및 루프 조건 수정
+- [x] **T003** 🔒 findPixelDataTag() 함수 리팩토링 - 상수 import 및 루프 조건 수정
   - 파일: `viewer/src/data/dicomParser/pixelDataParser.js`
   - 작업 내용:
     - 기존 하드코딩된 `targetGroup = 0x7FE0`, `targetElement = 0x0010`을 `PIXEL_DATA_TAG.group`, `PIXEL_DATA_TAG.element`로 교체
@@ -71,7 +71,7 @@
     - 오프셋 132부터 2바이트 간격으로 탐색 시작 확인
     - 기존 테스트 회귀 없음
 
-- [ ] **T004** 🔒 입력 검증 및 조기 반환 로직 추가
+- [x] **T004** 🔒 입력 검증 및 조기 반환 로직 추가
   - 파일: `viewer/src/data/dicomParser/pixelDataParser.js`
   - 작업 내용:
     - `bufferLength <= DICOM_PREAMBLE_SIZE` 조건 검사 추가 (FR-009)
@@ -89,7 +89,7 @@
 - **Goal**: DICOM 버퍼 전체를 선형 탐색하여 픽셀 데이터 태그(7FE0,0010)의 시작 위치를 정확히 반환
 - **Independent Test**: 픽셀 데이터 태그가 특정 오프셋에 위치한 DICOM 버퍼를 생성하여 findPixelDataTag() 호출 후 반환값이 해당 오프셋과 일치하는지 검증
 
-- [ ] **T005** 🔀 [US1] 선형 탐색 루프 핵심 로직 구현 - DataView 읽기 및 태그 매칭
+- [x] **T005** 🔀 [US1] 선형 탐색 루프 핵심 로직 구현 - DataView 읽기 및 태그 매칭
   - 파일: `viewer/src/data/dicomParser/pixelDataParser.js`
   - 작업 내용:
     - `for` 루프: `let offset = DICOM_PREAMBLE_SIZE` 부터 `offset + 4 <= bufferLength` 까지 `offset += 2` 간격 순회 (FR-004)
@@ -106,7 +106,7 @@
     - 태그가 없는 버퍼에서 -1 반환
     - 루프가 2바이트 간격으로 순회 (offset += 2)
 
-- [ ] **T006** 🔀 [US1] DataView 예외 try-catch 처리 구현 및 검증
+- [x] **T006** 🔀 [US1] DataView 예외 try-catch 처리 구현 및 검증
   - 파일: `viewer/src/data/dicomParser/pixelDataParser.js`
   - 작업 내용:
     - `try-catch` 블록이 `getUint16` 호출을 정확히 감싸고 있는지 확인
