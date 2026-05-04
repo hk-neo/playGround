@@ -102,16 +102,41 @@
 - [x] SDS-3.9 parseMetadata() 상세 설계 21개 태스크 도출
 - [x] 01_spec.md / 02_plan.md / 03_tasks.md 산출물 작성 완료
 - [x] !plan 완료 상태
+## 2. 해결 완료된 주요 이슈 및 기술 스택
+
+### 2.1 PLAYG-1831 완료 내역
+- [x] SDS-3.12 maskPhiFields() PHI 마스킹 상세 설계 14개 태스크 도출 (10h 예상)
+- [x] 01_spec.md / 02_plan.md / 03_tasks.md 산출물 작성 완료
+- [x] !plan 완료 상태
+- [x] !implement 완료 - phiGuard.js 구현 및 테스트 작성
+  - PHI_FIELDS: Object.freeze 적용 (TC-1)
+  - PHI_MASK: [REDACTED] 상수 분리 (TC-3)
+  - phiStore: WeakMap 모듈 스코프 캡슐화 (TC-2)
+  - maskPhiFields(metadata): null/undefined/비객체 가드, 빈문자열 마스킹 생략, upsert 로직
+  - getPhiValue(metadata, field): PHI_FIELDS 화이트리스트, null 가드
+  - dumpPhiValues(metadata): @internal, null 가드, 얕은 복사 반환
+  - index.js 배럴 export: maskPhiFields, getPhiValue만 노출 (dumpPhiValues 제외)
+  - metadataParser.js Step 8 연동 확인
+  - 단위 테스트: TC-12.1~12.6 + dumpPhiValues(5개) + WeakMap/GC(2개) = 19개 테스트
+  - phiGuard.js 커버리지: Stmts/Branch/Funcs/Lines 100%
+  - 전체 264개 테스트 통과, 기존 251개 회귀 없음
+
+### 2.2 PLAYG-1828 완료 내역
+- [x] SDS-3.9 parseMetadata() 상세 설계 21개 태스크 도출
+- [x] 01_spec.md / 02_plan.md / 03_tasks.md 산출물 작성 완료
+- [x] !plan 완료 상태
+
+### 2.3 이전 세션 (PLAYG-1827) 완료 내역
+- constants.js ERROR_MESSAGES 구문 오류 수정 (}); 누락 -> }); 수정)
+- readTagValue() T1-T7 보강: VR별 hasRemaining() 가드, DS/IS 다중값 배열, try-catch offset 무결성
+- 251개 테스트 전체 통과, 전체 빌드 성공
 
 ## 3. 미완료 / Next Steps
-- [ ] PLAYG-1831: 14개 태스크에 대한 !implement 실행 필요
-- [ ] PLAYG-1831: phiGuard.js 소스코드 실제 구현
-- [ ] PLAYG-1831: PHI 마스킹 단위 테스트 작성 및 통과
 - [ ] PLAYG-1828: 21개 태스크에 대한 !implement 실행 필요
 - [ ] PLAYG-1828: parseMetadata() 소스코드 실제 구현 (metadataParser.js)
 - [ ] PLAYG-1828: 메타데이터 파싱 단위 테스트 작성 및 통과
-- [ ] 전체 빌드 및 기존 251개 테스트 회귀 검증
+- [ ] 전체 빌드 및 기존 264개 테스트 회귀 검증
 - [ ] 각 티켓 Jira 완료 댓글 게시
 
 ---
-_최종 갱신: 2026-05-04 | PLAYG-1831 !plan 완료_
+_최종 갱신: 2026-05-04 | PLAYG-1831 !implement 완료_

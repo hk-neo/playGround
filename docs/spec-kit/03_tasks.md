@@ -14,7 +14,7 @@
 ## Phase 1: Setup (공통 인프라)
 <!-- 모든 다음 단계에 필요한 공통 상수·구조 선언 -->
 
-- [ ] **T001** 🔒 PHI 상수 및 phiStore WeakMap 선언
+- [x] **T001** 🔒 PHI 상수 및 phiStore WeakMap 선언
   - 파일: `viewer/src/data/dicomParser/phiGuard.js` (신규 생성)
   - 작업 내용:
     - `phiGuard.js` 파일 생성 (모듈 스켈레톤)
@@ -30,7 +30,7 @@
 ## Phase 2: Foundational (선행 필수 핵심 함수)
 <!-- CRITICAL: 사용자 스토리 구현 전 반드시 완료해야 할 코어 마스킹 로직 -->
 
-- [ ] **T002** 🔒 maskPhiFields(metadata) 코어 구현 — 입력 가드 및 PHI 순회 마스킹
+- [x] **T002** 🔒 maskPhiFields(metadata) 코어 구현 — 입력 가드 및 PHI 순회 마스킹
   - 파일: `viewer/src/data/dicomParser/phiGuard.js`
   - 작업 내용:
     - `export function maskPhiFields(metadata)` 함수 구현
@@ -50,7 +50,7 @@
   - 추적: FR-4.1, NFR-4, HAZ-3.1, TC-12.1, TC-12.2, TC-12.5, TC-12.6
   - 완료 조건: `maskPhiFields({ patientName: '홍길동', patientID: 'P001', patientBirthDate: '19900101' })` 호출 후 세 필드가 모두 `'[REDACTED]'`로 치환됨. `maskPhiFields(null)` → `null` 반환 (예외 없음). `maskPhiFields(undefined)` → `undefined` 반환. `maskPhiFields(42)` → `42` 반환. 빈 문자열 필드는 마스킹되지 않고 그대로 유지. 반환값이 입력과 동일 참조임.
 
-- [ ] **T003** 🔒 getPhiValue(metadata, field) 구현 — 화이트리스트 기반 원본 조회
+- [x] **T003** 🔒 getPhiValue(metadata, field) 구현 — 화이트리스트 기반 원본 조회
   - 파일: `viewer/src/data/dicomParser/phiGuard.js`
   - 작업 내용:
     - `export function getPhiValue(metadata, field)` 함수 구현
@@ -63,7 +63,7 @@
   - 추적: FR-4.5, SEC-3, TC-12.3, TC-12.4
   - 완료 조건: 마스킹된 객체에서 `getPhiValue(meta, 'patientName')` 호출 시 원본 값(예: `'홍길동'`) 반환. `getPhiValue(meta, 'rows')` 호출 시 `undefined` 반환 (비 PHI 필드 차단). 마스킹 이력 없는 객체에서 `getPhiValue(meta, 'patientName')` 호출 시 `undefined` 반환.
 
-- [ ] **T004** 🔒 dumpPhiValues(metadata) 구현 — @internal 전체 덤프
+- [x] **T004** 🔒 dumpPhiValues(metadata) 구현 — @internal 전체 덤프
   - 파일: `viewer/src/data/dicomParser/phiGuard.js`
   - 작업 내용:
     - `function dumpPhiValues(metadata)` 함수 구현 (export 없음, 모듈 내부 전용)
@@ -82,7 +82,7 @@
 - **Goal**: `maskPhiFields()`가 DICOM 메타데이터의 PHI 필드 3종을 정확히 마스킹하고, null/undefined/비객체 입력에 대해 예외 없이 안전하게 처리하는지 검증
 - **Independent Test**: 환자 정보가 포함된 메타데이터 객체를 `maskPhiFields()`에 전달 후, patientName/patientID/patientBirthDate 필드가 `[REDACTED]`로 치환되었는지 직접 검증
 
-- [ ] **T005** :lock: [US-1] TC-12.1 ~ TC-12.2: PHI 필드 마스킹 검증 테스트 작성
+- [x] **T005** :lock: [US-1] TC-12.1 ~ TC-12.2: PHI 필드 마스킹 검증 테스트 작성
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - `describe('phiGuard - PHI 마스킹 보안 가드')` 블록 생성
@@ -98,7 +98,7 @@
   - 추적: FR-4.1, HAZ-3.1, TC-12.1, TC-12.2
   - 완료 조건: TC-12.1, TC-12.2 테스트 2개 PASS. `patientName`, `patientID`, `patientBirthDate`가 모두 `'[REDACTED]'`로 치환됨. 비 PHI 필드(`rows`)는 변경되지 않음.
 
-- [ ] **T006** :lock: [US-1] TC-12.5 ~ TC-12.6: 빈 문자열 및 null 안전성 테스트 작성
+- [x] **T006** :lock: [US-1] TC-12.5 ~ TC-12.6: 빈 문자열 및 null 안전성 테스트 작성
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - **TC-12.5**: `test('빈 문자열 마스킹 생략')`
@@ -121,7 +121,7 @@
 - **Goal**: `getPhiValue()`가 PHI_FIELDS에 등록된 필드만 조회 가능하고, 비인가 필드 접근은 `undefined`를 반환하는지 검증
 - **Independent Test**: 마스킹된 metadata 객체에서 `getPhiValue()`로 원본 값을 조회하고, 비 PHI 필드 조회 시 `undefined`가 반환되는지 검증
 
-- [ ] **T007** :lock: [US-2] TC-12.3 ~ TC-12.4: getPhiValue 화이트리스트 및 차단 테스트 작성
+- [x] **T007** :lock: [US-2] TC-12.3 ~ TC-12.4: getPhiValue 화이트리스트 및 차단 테스트 작성
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - **TC-12.3**: `test('getPhiValue 원본 조회')`
@@ -148,7 +148,7 @@
 - **Goal**: `dumpPhiValues()`가 마스킹된 메타데이터의 모든 원본 PHI 값을 일괄 반환하고, `@internal`로 프로덕션에 노출되지 않는지 검증
 - **Independent Test**: `maskPhiFields()` 처리 후 `dumpPhiValues()`를 호출하여 원본 값이 모두 포함된 객체가 반환되는지 확인
 
-- [ ] **T008** :lock: [US-3] dumpPhiValues 동작 검증 테스트 작성
+- [x] **T008** :lock: [US-3] dumpPhiValues 동작 검증 테스트 작성
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - `dumpPhiValues`는 배럴 export에서 제외되므로 내부 경로로 직접 import
@@ -174,7 +174,7 @@
 - **Goal**: WeakMap 기반 `phiStore`를 사용하여 metadata 객체가 GC될 때 원본 PHI 값도 자동 해제됨을 간접적으로 확인
 - **Independent Test**: 대량의 metadata 객체를 생성/마스킹 후 참조를 해제하고 GC 수행 시 메모리가 회수되는지 간접 확인
 
-- [ ] **T009** :lock: [US-4] WeakMap GC 연동 및 메모리 안전성 테스트 작성
+- [x] **T009** :lock: [US-4] WeakMap GC 연동 및 메모리 안전성 테스트 작성
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - **테스트 1**: `test('phiStore가 WeakMap 인스턴스인지 확인')`
@@ -195,7 +195,7 @@
 
 ## Phase 7: 배럴 Export 업데이트 및 통합 연동
 
-- [ ] **T010** :lock: index.js 배럴 export 업데이트
+- [x] **T010** :lock: index.js 배럴 export 업데이트
   - 파일: `viewer/src/data/dicomParser/index.js`
   - 작업 내용:
     - 기존 export 목록에 `maskPhiFields`와 `getPhiValue`를 named export로 추가
@@ -206,7 +206,7 @@
   - 추적: TC-4, US-3
   - 완료 조건: `import { maskPhiFields, getPhiValue } from './dicomParser/index.js'` 동작. `import { dumpPhiValues } from './dicomParser/index.js'` 시 `undefined` 또는 에러 (export되지 않음). 기존 export 항목 회귀 없음.
 
-- [ ] **T011** :lock: metadataParser.js Step 8에 maskPhiFields() 호출 연동
+- [x] **T011** :lock: metadataParser.js Step 8에 maskPhiFields() 호출 연동
   - 파일: `viewer/src/data/dicomParser/metadataParser.js`
   - 작업 내용:
     - `import { maskPhiFields } from './phiGuard.js'` import 구문 추가
@@ -222,7 +222,7 @@
 
 ## Phase 8: Integration & Finalization
 
-- [ ] **T012** :lock: 전체 테스트 스위트 실행 및 회귀 검증
+- [x] **T012** :lock: 전체 테스트 스위트 실행 및 회귀 검증
   - 파일: `viewer/tests/unit.test.js`
   - 작업 내용:
     - `npx vitest run` 으로 전체 단위 테스트 실행
@@ -233,7 +233,7 @@
   - 추적: SC-1, SC-2, SC-3 전체
   - 완료 조건: TC-12.1 ~ TC-12.6 전체 PASS. 기존 테스트 회귀 없음. phiGuard.js 분기 커버리지 100%.
 
-- [ ] **T013** :lock: JSDoc 주석 완비 및 코드 정리
+- [x] **T013** :lock: JSDoc 주석 완비 및 코드 정리
   - 파일: `viewer/src/data/dicomParser/phiGuard.js`
   - 작업 내용:
     - `maskPhiFields`: `@param`, `@returns`, `@throws`(없음 명시), `@example` JSDoc 작성
@@ -247,7 +247,7 @@
   - 추적: TC-5 (IEC 62304 Class A)
   - 완료 조건: 모든 공개 함수에 JSDoc 주석 완비. `@internal` 태그 부여 확인. 불필요한 로깅/주석 제거. ESLint 경고 없음.
 
-- [ ] **T014** :lock: 문서 업데이트 및 git commit/push
+- [x] **T014** :lock: 문서 업데이트 및 git commit/push
   - 파일: `docs/spec-kit/03_tasks.md`, `docs/artifacts/SDS.md` (필요시)
   - 작업 내용:
     - `03_tasks.md` 체크리스트 항목 완료 표시 업데이트
