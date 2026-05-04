@@ -1,149 +1,136 @@
-# 기능 명세서: parseMetadata() - DICOM 데이터셋 전체 메타데이터 파싱
+# 기능 명세서: dumpPhiValues() - PHI 일괄조회 (내부용/디버그)
 
-**Feature Branch**: `PLAYG-1828-parse-metadata`
-**Status**: Draft | **Date**: 2026-04-29
-**Ticket**: `PLAYG-1828` | **Type**: Detailed Design (SDS-3.9)
-**Input**: Jira 티켓 PLAYG-1828 상세 설계 요청
+**Feature Branch**: `PLAYG-1833-dump-phi-values`
+**Status**: Draft | **Date**: 2026-05-04
+**Ticket**: `PLAYG-1833` | **Type**: Detailed Design (SDS-3.14)
+**Safety Class**: IEC 62304 Class A
+**Input**: Jira 티켓 PLAYG-1833 상세 설계 요청
 
 ---
 
 ## User Scenarios & Testing
 
-### User Story 1 - DICOM 파일 메타데이터 추출 (Priority: P1) :dart: MVP
-- **설명**: DICOM 파일 버퍼를 입력받아 15개 메타데이터 필드를 자동으로 추출한다. 환자 정보, 영상 정보, 윈도우 설정 등 DICOM 데이터셋의 핵심 속성을 구조화된 DICOMMetadata 객체로 반환한다.
-- **Why this priority**: 메타데이터 추출은 DICOM 뷰어의 모든 downstream 기능(렌더링, 프리셋, PHI 보호)의 전제 조건이다.
-- **Independent Test**: 유효한 DICOM 버퍼를 parseMetadata()에 전달하여 반환된 metadata 객체의 15개 필드 값을 직접 검증한다.
+### User Story 1 - 마스킹된 PHI 원본 값 일괄 조회 (Priority: P1) :dart: MVP
+- **설명**: maskPhiFields()에 의해 마스킹된 DICOMMetadata 객체에서 WeakMap(phiStore)에 저장된 모든 원본 PHI 값을 일괄 조회한다. patientName, patientID, patientBirthDate 3개 필드의 원본 값을 키-값 쌍 객체로 반환한다.
+- **Why this priority**: dumpPhiValues()는 PHI 보호 메커니즘의 검증 및 디버그 핵심 수단으로, 마스킹 동작의 정확성을 확인하기 위해 필수적이다.
+- **Independent Test**: maskPhiFields()로 마스킹된 metadata 객체를 dumpPhiValues()에 전달하여, 반환된 객체의 patientName/patientID/patientBirthDate 값이 원본과 일치하는지 직접 검증한다.
 - **Acceptance Scenarios**:
-  1. **Given** 132바이트 이상의 유효한 DICOM 파일 버퍼가 주어지면, **When** parseMetadata(buffer)를 호출하면, **Then** 15개 메타데이터 필드가 포함된 DICOMMetadata 객체를 반환한다.
-  2. **Given** preParsedMeta 객체가 제공되면, **When** parseMetadata(buffer, preParsedMeta)를 호출하면, **Then** 메타 그룹 재파싱 없이 데이터셋 태그 순회만 수행한다.
-  3. **Given** 필수 태그(rows, columns, bitsAllocated, pixelRepresentation)가 포함된 버퍼이면, **When** 파싱 완료 후, **Then** metadata 객체에 해당 값이 정확히 저장된다.
+  1. **Given** maskPhiFields()로 마스킹된 DICOMMetadata 객체가 존재하면, **When** dumpPhiValues(metadata)를 호출하면, **Then** phiStore에 저장된 모든 원본 PHI 값(patientName, patientID, patientBirthDate)을 포함한 객체를 반환한다. (추적: FR-4.1)
+  2. **Given** 마스킹된 metadata의 원본 patientName이 '홍길동'이면, **When** dumpPhiValues(metadata)를 호출하면, **Then** 반환 객체의 patientName 속성값은 '홍길동'이다.
+  3. **Given** 마스킹된 metadata의 원본 patientID가 'P12345'이면, **When** dumpPhiValues(metadata)를 호출하면, **Then** 반환 객체의 patientID 속성값은 'P12345'이다.
 
-### User Story 2 - 필수 태그 누락 검증 및 에러 보고 (Priority: P1) :dart: MVP
-- **설명**: DICOM 표준에서 필수로 요구하는 태그가 누락된 경우 구조화된 에러를 생성하여 반환한다. 파싱은 중단하지 않고 최대한 진행하며, 누락된 필수 태그마다 PARSE_ERR_MISSING_REQUIRED_TAG 에러를 기록한다.
-- **Why this priority**: 필수 태그 누락은 렌더링 실패의 직접적 원인이 되므로 즉각적인 에러 피드백이 필수적이다.
-- **Independent Test**: 필수 태그가 의도적으로 누락된 버퍼를 입력하여 errors 배열에 PARSE_ERR_MISSING_REQUIRED_TAG 에러가 포함되는지 확인한다.
+### User Story 2 - 마스킹 이력 없는 객체에 대한 안전한 빈 반환 (Priority: P1) :dart: MVP
+- **설명**: maskPhiFields()를 거치지 않았거나 phiStore에 등록되지 않은 metadata 객체를 입력하면 예외를 발생시키지 않고 빈 객체 {}를 안전하게 반환한다.
+- **Why this priority**: null/undefined 입력 및 미마스킹 객체 처리는 런타임 안정성의 핵심이며, IEC 62304 Class A 요구사항을 충족해야 한다.
+- **Independent Test**: maskPhiFields()를 호출하지 않은 순수 metadata 객체 또는 null을 dumpPhiValues()에 전달하여 빈 객체 {}가 반환되는지 확인한다.
 - **Acceptance Scenarios**:
-  1. **Given** rows(00280010) 태그가 누락된 DICOM 버퍼이면, **When** parseMetadata() 호출 후, **Then** errors 배열에 PARSE_ERR_MISSING_REQUIRED_TAG 에러가 tag 키와 함께 포함된다.
-  2. **Given** windowCenter(00281050) 태그가 누락된 DICOM 버퍼이면, **When** parseMetadata() 호출 후, **Then** metadata.windowCenter가 기본값 40으로 설정되고 PARSE_WARN_OPTIONAL_TAG_MISSING 경고가 기록된다.
+  1. **Given** maskPhiFields()를 호출한 적 없는 metadata 객체이면, **When** dumpPhiValues(metadata)를 호출하면, **Then** 빈 객체 {}를 반환한다. (추적: FR-4.1)
+  2. **Given** metadata가 null이면, **When** dumpPhiValues(null)을 호출하면, **Then** 예외 없이 빈 객체 {}를 반환한다. (추적: SEC-3)
+  3. **Given** metadata가 undefined이면, **When** dumpPhiValues(undefined)를 호출하면, **Then** 예외 없이 빈 객체 {}를 반환한다. (추적: SEC-3)
 
-### User Story 3 - 무한 루프 방지 및 버퍼 안전성 보장 (Priority: P1) :dart: MVP
-- **설명**: 악의적이거나 손상된 DICOM 파일로 인한 무한 루프와 버퍼 초과 읽기를 방지한다. MAX_TAG_COUNT 상한 검사, hasRemaining() 버퍼 경계 확인, readTag() 예외 처리를 통해 프로덕션 안정성을 보장한다.
-- **Why this priority**: 안전 조치 없이는 브라우저 탭이 멈추거나 메모리 오류가 발생할 수 있다.
-- **Independent Test**: 조작된 버퍼(무한 루프 유도, 버퍼 초과)를 입력하여 안전하게 종료되는지 확인한다.
+### User Story 3 - 반환값의 캡슐화 및 데이터 무결성 보장 (Priority: P2)
+- **설명**: dumpPhiValues()는 phiStore 내부 참조가 아닌 얕은 복사본을 반환하여, 호출자가 반환 객체를 수정해도 phiStore의 원본 데이터가 변경되지 않도록 캡슐화를 보장한다.
+- **Why this priority**: phiStore 내부 데이터 무결성은 PHI 보호 체계의 근간이며, 외부 수정으로부터 보호되어야 한다.
+- **Independent Test**: dumpPhiValues() 반환 객체의 속성을 변경한 후, 동일 metadata로 다시 dumpPhiValues()를 호출하여 원본이 보존되었는지 확인한다.
 - **Acceptance Scenarios**:
-  1. **Given** 태그가 10000개를 초과하는 DICOM 버퍼이면, **When** 파싱 중 tagCount가 MAX_TAG_COUNT에 도달하면, **Then** 순회를 강제 종료하고 그때까지 수집된 메타데이터를 반환한다.
-  2. **Given** 버퍼 끝에서 태그 헤더(4바이트)가 불충분한 상황이면, **When** ctx.hasRemaining(4)가 false이면, **Then** while 루프가 자연 종료된다.
-  3. **Given** readTag() 내부에서 예외가 발생하면, **When** try-catch 블록이 예외를 캐치하면, **Then** 에러를 컨텍스트에 기록하고 안전하게 break 한다.
-### User Story 4 - 픽셀 데이터 그룹 조기 종료 최적화 (Priority: P2)
-- **설명**: 태그 순회 중 픽셀 데이터 그룹(0x7FE0)에 도달하면 더 이상 메타데이터가 존재하지 않으므로 순회를 즉시 중단하고 픽셀 데이터 오프셋과 길이를 캐시한다.
-- **Why this priority**: 성능 최적화 기능으로 기능적 정확성에는 영향이 없으나 대용량 파일에서 유의미한 성능 향상을 제공한다.
-- **Independent Test**: 픽셀 데이터 그룹 앞에 수천 개의 불필요한 태그가 있는 버퍼에서 파싱 시간을 측정하여 조기 종료가 동작하는지 확인한다.
-- **Acceptance Scenarios**:
-  1. **Given** 그룹 번호가 0x7FE0 이상인 태그에 도달하면, **When** 순회 중 group >= PIXEL_DATA_GROUP 조건이 충족되면, **Then** _pixelDataOffset과 _pixelDataLength를 기록하고 즉시 break 한다.
+  1. **Given** 마스킹된 metadata에서 dumpPhiValues()로 얻은 객체의 patientName을 '변경값'으로 수정하면, **When** 동일 metadata로 dumpPhiValues()를 재호출하면, **Then** 반환 객체의 patientName은 여전히 원본값('홍길동')이다. (추적: SEC-3)
+  2. **Given** 반환된 객체에 새로운 속성을 추가하면, **When** phiStore 내부를 조회하면, **Then** phiStore의 원본 객체에는 해당 속성이 존재하지 않는다.
 
-### User Story 5 - PHI(개인건강정보) 자동 마스킹 (Priority: P1) :dart: MVP
-- **설명**: 추출된 메타데이터 중 환자 식별 정보(patientName, patientID, patientBirthDate)를 [REDACTED]로 자동 마스킹한다. 원본 값은 phiGuard 모듈의 WeakMap에 안전하게 저장되어 필요시에만 접근 가능하다.
-- **Why this priority**: 의료 소프트웨어에서 PHI 보호는 법적 및 규제적 필수 사항이다.
-- **Independent Test**: patientName과 patientID가 포함된 버퍼 파싱 후 metadata 객체에서 해당 필드가 [REDACTED]로 치환되었는지 확인한다.
+### User Story 4 - 프로덕션 환경 접근 제한 (Priority: P2)
+- **설명**: dumpPhiValues()는 개발/디버그 환경에서만 사용해야 하며, 프로덕션 빌드에서는 트리쉐이킹 또는 환경 변수 가드를 통해 제외되어야 한다. 반환된 PHI 정보의 콘솔 출력 및 외부 전송은 엄격히 금지된다.
+- **Why this priority**: PHI 정보 유출은 HAZ-3.1(정보 유출 방지)에 직결되는 심각한 보안 위험이다.
+- **Independent Test**: 프로덕션 빌드 산출물에서 dumpPhiValues() 함수가 포함되지 않았는지 번들 분석으로 확인한다.
 - **Acceptance Scenarios**:
-  1. **Given** patientName과 patientID가 포함된 DICOM 버퍼이면, **When** parseMetadata() 호출 후, **Then** metadata.patientName과 metadata.patientID가 [REDACTED]로 마스킹된다.
-  2. **Given** 마스킹된 메타데이터이면, **When** phiGuard 모듈의 WeakMap을 조회하면, **Then** 원본 환자 식별 정보를 안전하게 복원할 수 있다.
+  1. **Given** 프로덕션 빌드 환경이면, **When** 번들을 분석하면, **Then** dumpPhiValues() 함수가 트리쉐이킹에 의해 제외되어 있다. (추적: SEC-3)
+  2. **Given** 개발 환경에서 dumpPhiValues()를 호출하여 반환된 객체를 획득하면, **When** 반환값을 콘솔에 출력하거나 외부로 전송하면, **Then** 정책 위반이다. (추적: HAZ-3.1)
 
 ### Edge Cases (엣지 케이스)
-- **EC-001**: buffer가 null이거나 undefined인 경우 - PARSE_ERR_UNEXPECTED 에러 발생
-- **EC-002**: buffer.byteLength가 132바이트 미만인 경우 - 최소 크기 검증 실패로 PARSE_ERR_UNEXPECTED 에러
-- **EC-003**: preParsedMeta가 제공되었으나 transferSyntaxUID가 누락된 경우 - parseMetaGroup() 재호출
-- **EC-004**: 모든 필수 태그가 누락된 극단적 손상 파일 - 다수의 PARSE_ERR_MISSING_REQUIRED_TAG 에러 반환
-- **EC-005**: readTag()가 예외를 발생시키는 손상 태그 - 에러 기록 후 안전한 break
-- **EC-006**: tagCount가 정확히 MAX_TAG_COUNT(10000)에 도달한 경우 - 정상 종료 (초과 시에만 강제 종료)
-- **EC-007**: pixelSpacing(00280030) 값이 단일 값인 경우 (정상은 2개 값) - 기본값 [1, 1] 적용
-- **EC-008**: bitsStored 누락 시 기본값 16 적용 - 렌더링 품질 저하 가능성 경고
+- **EC-001**: metadata가 null인 경우 - phiStore.get(null)이 undefined를 반환하므로 빈 객체 {} 반환
+- **EC-002**: metadata가 undefined인 경우 - phiStore.get(undefined)이 undefined를 반환하므로 빈 객체 {} 반환
+- **EC-003**: maskPhiFields()를 호출하지 않은 순수 객체 - phiStore에 키가 없으므로 빈 객체 {} 반환
+- **EC-004**: 이미 GC된 WeakMap 키 객체 - metadata 참조가 해제된 경우 phiStore에서 자동 삭제되어 빈 객체 {} 반환
+- **EC-005**: maskPhiFields()가 빈 metadata(모든 PHI 필드가 빈 문자열)를 마스킹한 경우 - 빈 문자열 원본 값이 포함된 객체 반환
+- **EC-006**: dumpPhiValues() 반환값을 수정 후 동일 metadata로 재조회 - 원본 값 보존 (얕은 복사 검증)
+
 ---
 
 ## Requirements
 
 ### Functional Requirements (기능 요구사항)
 
-- **FR-001**: 시스템은 DICOM 파일 버퍼(ArrayBuffer)를 입력받아 메타데이터를 추출하는 parseMetadata(buffer, preParsedMeta) 함수를 제공해야 한다. 함수 시그니처: parseMetadata(buffer: ArrayBuffer, preParsedMeta?: Object) -> { metadata, context, errors, transferSyntaxUID, _pixelDataOffset, _pixelDataLength }
-- **FR-002**: 시스템은 버퍼 크기가 DICOM_MIN_FILE_SIZE(132바이트) 미만이거나 null/undefined인 경우 PARSE_ERR_UNEXPECTED 에러를 발생시켜야 한다. (추적: HAZ-5.1)
-- **FR-003**: 시스템은 preParsedMeta가 제공된 경우 메타 그룹(0002) 재파싱을 건너뛰고 전달받은 transferSyntaxUID와 metaEndOffset을 재사용해야 한다.
-- **FR-004**: 시스템은 preParsedMeta가 없는 경우 parseMetaGroup(buffer)를 호출하여 전송 구문 UID와 메타 종료 오프셋을 획득해야 한다.
-- **FR-005**: 시스템은 createParseContext(buffer, transferSyntaxUID, metaEndOffset)로 파싱 컨텍스트를 생성해야 한다. 컨텍스트는 바이트 오더 및 VR 모드를 전송 구문에 따라 자동 설정한다.
-- **FR-006**: 시스템은 while 루프로 데이터셋 태그를 순차 순회하며 readTag(ctx)로 각 태그를 읽어야 한다. 순회 조건: ctx.hasRemaining(4) && tagCount < MAX_TAG_COUNT(10000). (추적: FR-2.2)
-- **FR-007**: 시스템은 METADATA_TAGS 사전에 정의된 15개 필드의 태그와 매칭되는 경우 수집된 값 객체(collected)에 저장해야 한다. (추적: FR-2.3)
+- **FR-001**: 시스템은 maskPhiFields()로 마스킹된 DICOMMetadata 객체에서 모든 원본 PHI 값을 일괄 조회하는 dumpPhiValues(metadata) 함수를 제공해야 한다. 함수 시그니처: `export function dumpPhiValues(metadata) -> Object` (추적: FR-4.1)
+- **FR-002**: 시스템은 metadata 파라미터를 WeakMap(phiStore)의 키로 사용하여 저장된 원본 값 객체를 조회해야 한다. (추적: FR-4.1, SEC-3)
+- **FR-003**: 시스템은 phiStore에 원본 객체가 존재하면 스프레드 연산자(`{ ...originals }`)를 사용한 얕은 복사본을 반환해야 한다. phiStore 내부 참조를 직접 반환해서는 안 된다. (추적: SEC-3)
+- **FR-004**: 시스템은 phiStore에 metadata 키가 없거나 metadata가 null/undefined인 경우 예외를 발생시키지 않고 빈 객체 `{}`를 반환해야 한다. (추적: SEC-3, FR-4.1)
+- **FR-005**: 반환 객체는 PHI_FIELDS에 정의된 3개 필드의 원본 값을 포함해야 한다.
 
-  | 태그 키 | 필드명 | 필수 여부 | 기본값 |
-  |---------|--------|-----------|--------|
-  | 00100010 | patientName | 선택 | (빈 문자열) |
-  | 00100020 | patientID | 선택 | (빈 문자열) |
-  | 0020000D | studyInstanceUID | 선택 | (빈 문자열) |
-  | 0020000E | seriesInstanceUID | 선택 | (빈 문자열) |
-  | 00280010 | rows | 필수 | 없음 (에러) |
-  | 00280011 | columns | 필수 | 없음 (에러) |
-  | 00280100 | bitsAllocated | 필수 | 없음 (에러) |
-  | 00280101 | bitsStored | 선택 | 16 |
-  | 00280103 | pixelRepresentation | 필수 | 없음 (에러) |
-  | 00281050 | windowCenter | 선택 | 40 |
-  | 00281051 | windowWidth | 선택 | 400 |
-  | 00180050 | sliceThickness | 선택 | 0 |
-  | 00280030 | pixelSpacing | 선택 | [1, 1] |
-  | 00280004 | photometricInterpretation | 선택 | MONOCHROME2 |
-  | 00280002 | samplesPerPixel | 선택 | 1 |
+  | 필드명 | DICOM Tag | 의미 |
+  |--------|-----------|------|
+  | patientName | (0010,0010) | 환자 이름 |
+  | patientID | (0010,0020) | 환자 ID |
+  | patientBirthDate | (0010,0030) | 환자 생년월일 |
 
-- **FR-008**: 시스템은 필수 태그(rows, columns, bitsAllocated, pixelRepresentation) 누락 시 PARSE_ERR_MISSING_REQUIRED_TAG 에러를 생성해야 한다. (추적: FR-1.3, HAZ-1.3)
-- **FR-009**: 시스템은 선택 태그 누락 시 METADATA_TAGS에 정의된 defaultValue를 적용하고 PARSE_WARN_OPTIONAL_TAG_MISSING 경고를 기록해야 한다.
-- **FR-010**: 시스템은 createDICOMMetadata() 팩토리 함수로 25개 필드 메타데이터 객체를 생성해야 한다. 이때 highBit는 bitsAllocated - 1로 자동 계산한다.
-- **FR-011**: 시스템은 maskPhiFields(metadata)를 호출하여 patientName, patientID, patientBirthDate를 [REDACTED]로 마스킹해야 한다. 원본은 WeakMap에 안전 저장한다. (추적: FR-4.1, HAZ-3.1)
-- **FR-012**: 시스템은 반환값으로 { metadata, context, errors, transferSyntaxUID, _pixelDataOffset, _pixelDataLength } 객체를 반환해야 한다.
+- **FR-006**: 함수는 Named export 형태로 제공되어야 하며, 소스 파일은 `viewer/src/data/dicomParser/phiGuard.js`에 위치해야 한다.
+
 ### Non-Functional Requirements (비기능 요구사항)
 
-- **NFR-001 (안전성)**: 무한 루프 방지를 위해 MAX_TAG_COUNT(10000) 상한을 초과하면 순회를 강제 종료해야 한다. (추적: FR-2.4, HAZ-5.1)
-- **NFR-002 (안전성)**: 모든 버퍼 읽기 전 ctx.hasRemaining()으로 잔여 바이트를 확인하여 버퍼 초과 읽기를 방지해야 한다. (추적: FR-2.6, HAZ-5.3)
-- **NFR-003 (성능)**: 픽셀 데이터 그룹(0x7FE0) 도달 시 불필요한 태그 순회를 즉시 중단하여 파싱 성능을 최적화해야 한다.
-- **NFR-004 (보안)**: PHI 필드 마스킹은 파싱 결과 반환 전 반드시 수행되어야 하며, 원본 데이터는 WeakMap에만 저장되어 GC 대상이 되도록 해야 한다. (추적: HAZ-3.1)
-- **NFR-005 (예외 안전성)**: readTag() 예외 발생 시 에러를 기록하고 안전하게 파싱을 종료해야 한다. 예외가 호출자로 전파되지 않아야 한다.
+- **NFR-001 (보안/캡슐화)**: 반환 시 phiStore 내부 참조가 아닌 얕은 복사본을 반환하여 데이터 무결성을 보장해야 한다. 현재 PHI_FIELDS는 모두 string 타입이므로 얕은 복사로도 완전한 분리가 보장된다. (추적: SEC-3)
+- **NFR-002 (보안/접근 제어)**: 본 함수는 개발/디버그 환경에서만 사용해야 하며, 프로덕션 빌드 시 트리쉐이킹 또는 환경 변수 가드로 제외하는 것을 권장한다. (추적: SEC-3)
+- **NFR-003 (보안/정보 유출 방지)**: 반환된 객체에는 민감한 PHI 정보가 포함되어 있으므로, 콘솔 출력이나 외부 전송을 엄격히 금지한다. (추적: HAZ-3.1)
+- **NFR-004 (안전성)**: null/undefined/malformed 입력에 대해 예외를 발생시키지 않고 안전하게 빈 객체를 반환해야 한다. (추적: SEC-3, IEC 62304 Class A)
 
 ### Key Entities (핵심 데이터 모델)
 
-- **DICOMMetadata**: createDICOMMetadata() 팩토리로 생성되는 25개 필드 메타데이터 객체. 핵심 속성: patientName, patientID, rows, columns, bitsAllocated, bitsStored, pixelRepresentation, windowCenter, windowWidth, sliceThickness, pixelSpacing, photometricInterpretation, samplesPerPixel, highBit(자동계산) 등
-- **ParseContext**: 파싱 세션 상태 관리 객체. 핵심 속성: offset, buffer, dataView, isLittleEndian, isExplicitVR, errors
-- **METADATA_TAGS**: 15개 DICOM 태그 정의 사전 (상수). 각 항목 속성: tag키(GGGGEEEE 형식), field(필드명), required(필수 여부), defaultValue(선택 태그 기본값)
-- **ParseError**: CBVError.ParseError 커스텀 에러 클래스. PARSE_ERR_UNEXPECTED, PARSE_ERR_MISSING_REQUIRED_TAG 에러 코드 포함
+- **phiStore (WeakMap)**: maskPhiFields()가 마스킹 시 원본 PHI 값을 저장하는 내부 WeakMap. 키는 DICOMMetadata 객체 참조, 값은 원본 PHI 값의 키-값 쌍 객체. GC 시 자동 삭제됨.
+- **PHI_FIELDS**: dumpPhiValues() 조회 대상 필드 정의 상수. patientName, patientID, patientBirthDate 3개 필드 포함.
+- **반환 객체**: phiStore에 저장된 원본 PHI 값의 얕은 복사본. 구조: `{ patientName: string, patientID: string, patientBirthDate: string }` 또는 빈 객체 `{}`
+
+### 조건별 동작표
+
+| 조건 | 동작 | 반환값 | 추적 |
+|------|------|--------|------|
+| metadata가 유효하고 마스킹 이력 있음 | phiStore에서 전체 원본 조회 | 원본 PHI 값 객체 (얕은 복사) | FR-4.1 |
+| phiStore에 metadata 키 없음 | 마스킹 이력 없음으로 판단 | 빈 객체 `{}` | FR-4.1 |
+| metadata가 null/undefined | phiStore.get()이 undefined 반환 | 빈 객체 `{}` | SEC-3 |
 
 ### 연관 모듈 의존성
 
-| 모듈 | 함수/상수 | 역할 | 연관 SDS |
-|------|-----------|------|----------|
-| metaGroupParser | parseMetaGroup() | 파일 메타 정보 그룹(0002) 파싱, 전송 구문 UID 결정 | SDS-3.8 |
-| ParseContext | createParseContext() | 전송 구문 기반 바이트 오더/VR 모드 자동 설정 | SDS-3.4 |
-| tagReader | readTag() | 개별 DICOM 태그 읽기 (Explicit/Implicit VR 지원) | SDS-3.5, SDS-3.6 |
-| phiGuard | maskPhiFields() | PHI 필드 마스킹 및 WeakMap 원본 저장 | SDS-3.13 |
-| DICOMMetadata | createDICOMMetadata() | 25개 필드 메타데이터 객체 팩토리 | SDS-3.10 |
-| constants | METADATA_TAGS, MAX_TAG_COUNT, PIXEL_DATA_GROUP, DICOM_MIN_FILE_SIZE | 파싱 상수 정의 | - |
-| dicomDictionary | makeTagKey() | group+element 조합의 태그 키 생성 (GGGGEEEE 형식) | - |
-| CBVError | ParseError | 파싱 오류 발생 시 throw 커스텀 에러 클래스 | - |
+| 모듈 | 관계 | 설명 | 연관 SDS |
+|------|------|------|----------|
+| phiGuard.js (본 모듈) | 정의 | dumpPhiValues()가 정의된 파일 | SDS-3.14 |
+| maskPhiFields() | 선행 조건 | 마스킹 수행 시 phiStore에 원본 저장. dumpPhiValues()는 이후에 호출 | SDS-3.13 |
+| getPhiValue() | 형제 함수 | 단일 PHI 필드 조회. dumpPhiValues()는 전체 일괄 조회 | SDS-3.13 |
+| phiStore (WeakMap) | 내부 저장소 | maskPhiFields()가 저장, dumpPhiValues()가 읽기 | - |
+
+### 추적성 매핑
+
+| 추적 ID | 출처 | 본 명세 반영 위치 |
+|---------|------|-------------------|
+| FR-4.1 | SRS - PHI 마스킹 요구사항 | FR-001, FR-002, FR-004, US-1, US-2 |
+| SEC-3 | SRS - 접근 제어 요구사항 | FR-003, FR-004, NFR-001, NFR-002, NFR-004 |
+| HAZ-3.1 | SRS - 정보 유출 방지 위험 | NFR-003, US-4 |
+| SAD COMP-3 | 아키텍처 - phiGuard 컴포넌트 | 전체 (phiGuard.js 모듈 설계) |
+
 ---
 
 ## Success Criteria
 
 ### Measurable Outcomes (측정 가능한 지표)
 
-- **SC-001**: 유효한 DICOM 버퍼 입력 시 15개 메타데이터 필드가 100% 정확하게 추출된다.
-- **SC-002**: 필수 태그 누락 시 PARSE_ERR_MISSING_REQUIRED_TAG 에러가 100% 감지되어 errors 배열에 포함된다.
-- **SC-003**: 선택 태그 누락 시 기본값이 정확히 적용되고 PARSE_WARN_OPTIONAL_TAG_MISSING 경고가 기록된다.
-- **SC-004**: 10000개 초과 태그 버퍼에서 무한 루프 없이 안전하게 종료된다.
-- **SC-005**: 픽셀 데이터 그룹(0x7FE0) 이후 불필요한 태그 순회가 발생하지 않는다.
-- **SC-006**: PHI 필드(patientName, patientID, patientBirthDate)가 [REDACTED]로 마스킹되고 원본은 WeakMap에서 복원 가능하다.
-- **SC-007**: preParsedMeta 제공 시 메타 그룹 재파싱이 발생하지 않는다 (중복 파싱 방지).
+- **SC-001**: 마스킹된 metadata 객체를 입력하면, phiStore에 저장된 3개 PHI 필드(patientName, patientID, patientBirthDate)의 원본 값이 100% 정확하게 반환된다.
+- **SC-002**: 마스킹 이력이 없는 metadata 객체, null, undefined 입력 시 예외 없이 빈 객체 {}가 반환된다.
+- **SC-003**: 반환된 객체를 수정해도 phiStore 내부 원본 데이터는 변경되지 않는다 (얕은 복사 무결성).
+- **SC-004**: 프로덕션 빌드에서 dumpPhiValues() 함수가 트리쉐이킹에 의해 제외된다.
 
 ### Definition of Done
 
-- [ ] 모든 FR-001 ~ FR-012 요구사항 구현 완료
-- [ ] parseMetadata() 함수가 9단계 파싱 절차를 정확히 수행
-- [ ] 단위 테스트 커버리지 90% 이상 (parseMetadata 함수)
-- [ ] Edge Case 시나리오(EC-001 ~ EC-008) 검증 완료
-- [ ] readTag() 예외 발생 시 안전한 종료 확인
-- [ ] MAX_TAG_COUNT 도달 시 강제 종료 확인
-- [ ] PHI 마스킹 적용 및 WeakMap 원본 저장 확인
-- [ ] 기존 parseMetadata() 통합 테스트 회귀 없음
+- [ ] dumpPhiValues() 함수가 phiGuard.js에 Named export로 구현 완료
+- [ ] FR-001 ~ FR-006 모든 기능 요구사항 구현 및 검증
+- [ ] NFR-001 ~ NFR-004 모든 비기능 요구사항 충족
+- [ ] 단위 테스트: 마스킹된 객체에서 원본 3개 필드 일괄 조회 성공
+- [ ] 단위 테스트: 미마스킹 객체에서 빈 객체 {} 반환
+- [ ] 단위 테스트: null/undefined 입력 시 빈 객체 {} 반환
+- [ ] 단위 테스트: 반환값 수정 후 원본 무결성 확인
+- [ ] Edge Case 시나리오(EC-001 ~ EC-006) 검증 완료
+- [ ] IEC 62304 Class A 안전 등급 요구사항 충족 (예외 안전성)
 - [ ] 코드 리뷰 승인

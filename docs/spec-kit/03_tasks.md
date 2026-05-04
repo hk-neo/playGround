@@ -1,7 +1,8 @@
-# Tasks: parseMetadata() - DICOM 데이터셋 전체 메타데이터 파싱
+# Tasks: dumpPhiValues() PHI 일괄조회 (내부용/디버그)
 
 **Input**: `docs/spec-kit/01_spec.md`, `docs/spec-kit/02_plan.md`
-**Ticket**: `PLAYG-1828` | **Date**: 2026-04-29
+**Ticket**: `PLAYG-1833` | **Date**: 2026-05-04
+**Safety Class**: IEC 62304 Class A
 
 > **형식 안내**
 > - `[ID]` : 태스크 번호 (T001, T002, ...)
@@ -12,339 +13,286 @@
 ---
 
 ## Phase 1: Setup (공통 인프라)
-<!-- 모든 다음 단계에 필요한 공통 상수·타입·에러코드 검증 -->
+<!-- 모든 다음 단계에 필요한 공통 환경 설정 -->
 
-- [ ] **T001** 🔒 상수 정의 검증 및 보강 (METADATA_TAGS, MAX_TAG_COUNT, PIXEL_DATA_GROUP, DICOM_MIN_FILE_SIZE)
-  - 파일: `viewer/src/constants/index.js`
+- [ ] **T001** 🔒 기존 phiGuard.js 코드 분석 및 FR-003 위반 사항 확인
+  - 파일: `viewer/src/data/dicomParser/phiGuard.js`
   - 작업 내용:
-    - `METADATA_TAGS` 사전에 15개 필드(태그키, 필드명, 필수 여부, 기본값)가 올바르게 정의되어 있는지 확인
-    - `MAX_TAG_COUNT = 10000` 상수 존재 및 값 확인
-    - `PIXEL_DATA_GROUP = 0x7FE0` 상수 존재 확인
-    - `DICOM_MIN_FILE_SIZE = 132` 상수 존재 확인
-    - 누락된 상수가 있으면 즉시 보강
-  - 추적: FR-2.2, FR-2.3, HAZ-5.1, HAZ-5.3
-  - 완료 조건: 4개 상수가 모두 `constants/index.js`에 정의되고, `METADATA_TAGS`에 15개 필드 항목이 누락 없이 존재함. `npm test` 기존 테스트 통과.
+    - 현재 `dumpPhiValues()` 구현(`return phiStore.get(metadata) || {}`)을 분석
+    - `phiStore.get(metadata)`가 truthy일 때 내부 참조를 직접 반환하여 캡슐화 위반 확인
+    - PHI_FIELDS(3개: patientName, patientID, patientBirthDate) 전부 string 타입임을 확인
+    - 얕은 복사(`{...originals}`)로 충분한 분리 보장 가능한지 검증
+  - 완료 조건: 현재 코드의 FR-003 비준수 사항(내부 참조 직접 반환)을 이슈로 정리하고, 수정 방안을 코드 주석으로 문서화
 
-- [ ] **T002** 🔒 CBVError.ParseError 에러 코드 검증 및 보강
-  - 파일: `viewer/src/errors/CBVError.js`
+- [ ] **T002** 🔒 테스트 환경 구성 및 phiGuard 모듈 import 검증
+  - 파일: `viewer/tests/unit/phiGuard.dumpPhiValues.test.js`(신규 생성), `viewer/tests/unit/` 디렉토리
   - 작업 내용:
-    - `PARSE_ERR_UNEXPECTED` 에러 코드 존재 확인 (EC-001, EC-002용)
-    - `PARSE_ERR_MISSING_REQUIRED_TAG` 에러 코드 존재 확인 (EC-004용)
-    - `PARSE_WARN_OPTIONAL_TAG_MISSING` 경고 코드 존재 확인 (EC-007, EC-008용)
-    - 누락된 에러/경고 코드가 있으면 즉시 보강
-  - 추적: FR-1.3, HAZ-1.3
-  - 완료 조건: 3개 에러/경고 코드가 `CBVError.ParseError`에 정의됨. 기존 테스트 통과.
+    - Jest 테스트 파일 `viewer/tests/unit/phiGuard.dumpPhiValues.test.js` 생성
+    - phiGuard.js에서 `dumpPhiValues`, `maskPhiFields` named import 가능한지 확인
+    - `describe('dumpPhiValues', () => { ... })` 최상위 스위트 골격 작성
+    - 기존 테스트 파일(`viewer/tests/unit.test.js` 등)이 정상 통과하는지 사전 확인
+  - 완료 조건: 빈 테스트 스위트가 Jest에서 정상 실행됨(PASS 0, FAIL 0), 기존 테스트 전부 PASS
 
-- [ ] **T003** 🔒 테스트 픽스처 및 헬퍼 유틸리티 생성
-  - 파일: `viewer/tests/unit/fixtures/validBuffer.js`, `viewer/tests/unit/fixtures/missingRequired.js`, `viewer/tests/unit/fixtures/oversizedBuffer.js`
-  - 작업 내용:
-    - `validBuffer.js`: 15개 메타데이터 필드가 모두 포함된 유효 DICOM ArrayBuffer 생성 헬퍼
-    - `missingRequired.js`: 필수 태그(rows/columns/bitsAllocated/pixelRepresentation)를 선택적으로 누락한 버퍼 생성 헬퍼
-    - `oversizedBuffer.js`: MAX_TAG_COUNT(10000) 초과 태그를 포함한 버퍼 생성 헬퍼
-    - 공통 헬퍼: 태그 헤더 작성(그룹+요소+길이), 값 쓰기, 픽셀 데이터 그룹(0x7FE0) 삽입 유틸
-  - 추적: EC-001 ~ EC-008
-  - 완료 조건: 각 픽스처 파일이 독립적으로 `import` 가능하고, 지정된 시나리오의 버퍼를 생성함. 유효 버퍼는 132바이트 이상 보장.
 ---
 
 ## Phase 2: Foundational (선행 필수 항목)
 <!-- CRITICAL: 사용자 스토리 구현 전 반드시 완료해야 할 핵심 인프라 -->
 
-- [ ] **T004** 🔒 의존 모듈 공개 API 검증 (metaGroupParser, ParseContext, tagReader, phiGuard, DICOMMetadata, dicomDictionary)
-  - 파일: `viewer/src/components/metaGroupParser.js`, `viewer/src/data/parseContext.js`, `viewer/src/components/tagReader.js`, `viewer/src/components/phiGuard.js`, `viewer/src/data/dicomMetadata.js`, `viewer/src/data/dicomDictionary.js`
+- [ ] **T003** 🔒 dumpPhiValues() 얕은 복사 반환으로 캡슐화 보강 (코어 구현)
+  - 파일: `viewer/src/data/dicomParser/phiGuard.js`
+  - 추적: FR-001, FR-002, FR-003, FR-004, FR-005, NFR-001, NFR-004, TD-01, TD-02
   - 작업 내용:
-    - `parseMetaGroup(buffer)` 함수 존재 및 반환 타입(`{ transferSyntaxUID, metaEndOffset }`) 확인
-    - `createParseContext(buffer, transferSyntaxUID, metaEndOffset)` 함수 존재 및 반환 타입(`{ offset, buffer, dataView, isLittleEndian, isExplicitVR, errors, hasRemaining() }`) 확인
-    - `readTag(ctx)` 함수 존재 및 반환 타입(`{ group, element, value, length }`) 확인
-    - `maskPhiFields(metadata)` 함수 존재 및 동작 확인
-    - `createDICOMMetadata(collected)` 함수 존재 및 25개 필드 객체 반환 확인
-    - `makeTagKey(group, element)` 함수 존재 및 GGGGEEEE 형식 문자열 반환 확인
-    - 각 모듈의 export 스타일(네임드/디폴트) 확인하여 import 구문 작성 준비
-  - 추적: FR-001, FR-003, FR-004, FR-005
-  - 완료 조건: 6개 의존 모듈의 공개 API가 spec에 명시된 시그니처와 일치함. 각 함수의 간단한 호출 테스트로 동작 검증 완료.
+    - `dumpPhiValues()` 본문을 다음과 같이 수정:
+      ```javascript
+      export function dumpPhiValues(metadata) {
+        const originals = phiStore.get(metadata);
+        return originals ? { ...originals } : {};
+      }
+      ```
+    - `|| {}`를 삼항 연산자로 변경: `phiStore.get(metadata)`가 빈 객체 `{}`를 반환할 때의 의미론적 명확성 확보
+    - 스프레드 연산자(`{ ...originals }`)로 얕은 복사본 생성: PHI_FIELDS가 전부 string이므로 얕은 복사로 완전한 분리 보장
+    - JSDoc `@returns` 태그에 얕은 복사본 반환 명시 추가
+    - IEC 62304 추적성 주석 추가 (FR-4.1, SEC-3, HAZ-3.1)
+  - 완료 조건:
+    - `dumpPhiValues(metadata)` 호출 시 phiStore 내부 참조가 아닌 새 객체 반환
+    - null/undefined 입력 시 예외 없이 빈 객체 `{}` 반환
+    - 기존 `maskPhiFields()`, `getPhiValue()` 동작에 영향 없음
 
-- [ ] **T005** 🔒 parseMetadata() 함수 스켈레톤 및 Step 1 (버퍼 크기 검증) 구현
-  - 파일: `viewer/src/components/metadataParser.js`
+- [ ] **T004** 🔒 배럴 파일(index.js) 미노출 원칙 확인 및 트리쉐이킹 검증 방안 수립
+  - 파일: `viewer/src/data/dicomParser/index.js`
+  - 추적: FR-006, NFR-002, TD-03
   - 작업 내용:
-    - `export function parseMetadata(buffer, preParsedMeta)` 함수 스켈레톤 생성
-    - Step 1: buffer null/undefined 체크 (EC-001)
-    - Step 1: buffer.byteLength < DICOM_MIN_FILE_SIZE(132) 체크 (EC-002)
-    - 검증 실패 시 `throw new CBVError.ParseError(PARSE_ERR_UNEXPECTED, ...)`
-    - 의존 모듈 import 문 작성 (constants, CBVError, metaGroupParser 등)
-  - 추적: FR-001, FR-002, EC-001, EC-002
-  - 완료 조건: null/undefined 입력 시 ParseError throw. 131바이트 버퍼 입력 시 ParseError throw. 132바이트 이상 버퍼 입력 시 에러 없이 다음 단계로 진행.
----
-
-## Phase 3: User Story 1 — DICOM 파일 메타데이터 추출 (Priority: P1) 🎯 MVP
-
-- **Goal**: DICOM 파일 버퍼를 입력받아 15개 메타데이터 필드를 자동 추출하여 구조화된 DICOMMetadata 객체로 반환
-- **Independent Test**: 유효한 DICOM 버퍼를 parseMetadata()에 전달하여 반환된 metadata 객체의 15개 필드 값을 직접 검증
-
-- [ ] **T006** 🔀 [US1] Step 2-3 구현: preParsedMeta 재사용 분기 및 파싱 컨텍스트 생성
-  - 파일: `viewer/src/components/metadataParser.js`
-  - 작업 내용:
-    - Step 2: preParsedMeta.transferSyntaxUID 존재 여부 확인
-    - preParsedMeta 유효 시: transferSyntaxUID, metaEndOffset 재사용 (FR-003)
-    - preParsedMeta 누락/무효 시: parseMetaGroup(buffer) 호출하여 획득 (FR-004, EC-003)
-    - Step 3: createParseContext(buffer, transferSyntaxUID, metaEndOffset) 호출 (FR-005)
-    - 컨텍스트 생성 실패 시 ParseError throw
-  - 추적: FR-003, FR-004, FR-005, EC-003
-  - 완료 조건: preParsedMeta 제공 시 parseMetaGroup() 호출되지 않음. 미제공 시 parseMetaGroup() 호출됨. createParseContext()로 컨텍스트 정상 생성.
-
-- [ ] **T007** 🔀 [US1] Step 4 구현: while 루프 태그 순회 핵심 로직
-  - 파일: `viewer/src/components/metadataParser.js`
-  - 작업 내용:
-    - 루프 조건: `ctx.hasRemaining(4) && tagCount < MAX_TAG_COUNT` (FR-006, NFR-001, NFR-002)
-    - readTag(ctx) 호출을 try-catch로 감싸고 예외 시 에러 기록 후 break (NFR-005, EC-005)
-    - 픽셀 데이터 그룹(0x7FE0) 도달 시 pixelDataOffset/pixelDataLength 캐시 후 break (NFR-003)
-    - METADATA_TAGS 사전으로 makeTagKey(group, element) 매칭하여 collected 객체에 값 저장 (FR-007)
-    - tagCount 증분 및 루프 종료 로직
-  - 추적: FR-2.2, FR-2.3, FR-006, FR-007, NFR-001, NFR-002, NFR-003, NFR-005, EC-005, EC-006, HAZ-5.1, HAZ-5.3
-  - 완료 조건: 유효 버퍼에서 15개 메타데이터 필드가 collected 객체에 저장됨. readTag() 예외 시 안전 break. 픽셀 데이터 그룹 도달 시 조기 종료. MAX_TAG_COUNT 도달 시 정상 종료.
-
-- [ ] **T008** 🔀 [US1] Step 5-7 구현: 필수 태그 검증, 선택 태그 기본값, 메타데이터 객체 생성
-  - 파일: `viewer/src/components/metadataParser.js`
-  - 작업 내용:
-    - Step 5: METADATA_TAGS에서 required=true인 필드(rows, columns, bitsAllocated, pixelRepresentation) 누락 감지 (FR-008, FR-1.3, HAZ-1.3)
-    - 누락 시 PARSE_ERR_MISSING_REQUIRED_TAG 에러를 ctx.errors에 추가 (파싱 중단하지 않음, EC-004)
-    - Step 6: required=false인 필드 누락 시 METADATA_TAGS.defaultValue 적용 (FR-009)
-    - pixelSpacing 단일 값 처리: value가 배열이 아닌 경우 [value, value]로 정규화 (EC-007)
-    - 선택 태그 누락 시 PARSE_WARN_OPTIONAL_TAG_MISSING 경고 기록
-    - Step 7: createDICOMMetadata(collected) 호출로 25개 필드 객체 생성 (FR-010)
-    - highBit = bitsAllocated - 1 자동 계산 확인
-  - 추적: FR-008, FR-009, FR-010, FR-1.3, HAZ-1.3, EC-004, EC-007, EC-008
-  - 완료 조건: 필수 태그 누락 시 에러 기록. 선택 태그 누락 시 기본값 적용. createDICOMMetadata()로 25개 필드 객체 생성. pixelSpacing 단일 값 정규화 동작.
-
-- [ ] **T009** 🔀 [US1] Step 8-9 구현: PHI 마스킹 및 결과 반환
-  - 파일: `viewer/src/components/metadataParser.js`
-  - 작업 내용:
-    - Step 8: maskPhiFields(metadata) 호출하여 patientName, patientID, patientBirthDate를 [REDACTED]로 마스킹 (FR-011, FR-4.1, HAZ-3.1)
-    - 원본 값은 phiGuard 모듈의 WeakMap에 안전 저장 확인 (NFR-004)
-    - Step 9: 반환 객체 구성: `{ metadata, context: ctx, errors: ctx.errors, transferSyntaxUID, _pixelDataOffset, _pixelDataLength }` (FR-012)
-    - 반환값 구조가 spec에 명시된 시그니처와 정확히 일치하는지 확인
-  - 추적: FR-011, FR-012, FR-4.1, HAZ-3.1, NFR-004
-  - 완료 조건: PHI 필드가 [REDACTED]로 마스킹됨. WeakMap에서 원본 복원 가능. 반환 객체가 6개 키(metadata, context, errors, transferSyntaxUID, _pixelDataOffset, _pixelDataLength)를 포함.
-
-- [ ] **T010** 🔒 [US1] 단위 테스트 작성 - 기본 파싱 및 preParsedMeta 재사용
-  - 파일: `viewer/tests/unit/parseMetadata.test.js`
-  - 작업 내용:
-    - TC-001: 유효한 DICOM 버퍼에서 15개 메타데이터 필드 전체 추출 검증 (SC-001)
-    - TC-002: null/undefined 버퍼 입력 시 PARSE_ERR_UNEXPECTED throw (EC-001)
-    - TC-003: 131바이트 버퍼 입력 시 PARSE_ERR_UNEXPECTED throw (EC-002)
-    - TC-004: preParsedMeta 제공 시 메타 그룹 재파싱 방지 확인 (FR-003, SC-007)
-    - TC-005: preParsedMeta 누락 시 parseMetaGroup() 호출 확인 (FR-004)
-    - TC-006: preParsedMeta에 transferSyntaxUID만 있고 metaEndOffset 누락된 케이스 (EC-003)
-  - 추적: SC-001, SC-007, EC-001, EC-002, EC-003
-  - 완료 조건: 6개 테스트 케이스 전체 PASS. 커버리지 90% 이상.
----
-
-## Phase 4: User Story 2 — 필수 태그 누락 검증 및 에러 보고 (Priority: P1) 🎯 MVP
-
-- **Goal**: 필수 태그 누락 시 구조화된 에러를 생성하여 반환하며, 파싱은 중단하지 않고 최대한 진행
-- **Independent Test**: 필수 태그가 의도적으로 누락된 버퍼를 입력하여 errors 배열에 PARSE_ERR_MISSING_REQUIRED_TAG 에러가 포함되는지 확인
-
-- [ ] **T011** 🔀 [US2] 필수 태그 누락 검증 로직 구현 및 강화
-  - 파일: `viewer/src/components/metadataParser.js`
-  - 작업 내용:
-    - METADATA_TAGS 사전에서 required=true 필드(rows, columns, bitsAllocated, pixelRepresentation) 순회 검증 로직 재확인
-    - 각 누락 필드마다 `{ code: PARSE_ERR_MISSING_REQUIRED_TAG, tag: tagKey, message }` 에러 객체를 ctx.errors에 추가
-    - 모든 필수 태그가 누락된 극단적 케이스(EC-004)에서 4개 에러가 모두 기록되는지 확인
-    - 파싱 중단 없이 루프 이후 검증 단계에서 에러 누적
-  - 추적: FR-008, FR-1.3, HAZ-1.3, EC-004, SC-002
-  - 완료 조건: 필수 태그 4개 각각 누락 시 PARSE_ERR_MISSING_REQUIRED_TAG 에러 기록. 전체 누락 시 4개 에러 모두 기록. 파싱은 중단되지 않음.
-
-- [ ] **T012** 🔒 [US2] 단위 테스트 작성 - 필수 태그 누락 시나리오
-  - 파일: `viewer/tests/unit/parseMetadata.test.js`
-  - 작업 내용:
-    - TC-007: rows(00280010) 누락 버퍼에서 PARSE_ERR_MISSING_REQUIRED_TAG 에러 확인 (US2-AS1)
-    - TC-008: columns(00280011) 누락 버퍼에서 에러 확인
-    - TC-009: bitsAllocated(00280100) 누락 버퍼에서 에러 확인
-    - TC-010: pixelRepresentation(00280103) 누락 버퍼에서 에러 확인
-    - TC-011: 필수 태그 전체 누락 시 4개 에러 동시 기록 확인 (EC-004)
-    - TC-012: 에러 기록 후에도 metadata 객체가 여전히 반환되는지 확인 (파싱 중단 없음)
-  - 추적: SC-002, EC-004, FR-008
-  - 완료 조건: 6개 테스트 케이스 전체 PASS.
+    - `index.js`에 `dumpPhiValues`가 re-export되지 않았음을 재확인
+    - 현재 `export { getPhiValue, maskPhiFields } from './phiGuard.js'` 만 노출 중임을 검증
+    - Vite/Rollup 프로덕션 빌드에서 dumpPhiValues가 트리쉐이킹 대상인지 빌드 설정 확인
+    - 필요시 빌드 산출물 분석 스크립트 또는 번들 분석 명령 문서화
+  - 완료 조건: index.js에 dumpPhiValues 미노출 확인, 프로덕션 빌드 트리쉐이킹 검증 방법을 주석 또는 문서로 기록
 
 ---
+## Phase 3: User Story 1 — 마스킹된 PHI 원본 값 일괄 조회 (Priority: P1) 🎯 MVP
 
-## Phase 5: User Story 3 — 무한 루프 방지 및 버퍼 안전성 보장 (Priority: P1) 🎯 MVP
+- **Goal**: maskPhiFields()로 마스킹된 DICOMMetadata 객체에서 phiStore에 저장된 모든 원본 PHI 값을 일괄 조회하여 반환한다.
+- **Independent Test**: maskPhiFields()로 마스킹된 metadata 객체를 dumpPhiValues()에 전달하여, 반환된 객체의 patientName/patientID/patientBirthDate 값이 원본과 일치하는지 직접 검증한다.
+- **추적**: FR-001, FR-002, FR-005, US-1
 
-- **Goal**: 악의적/손상된 DICOM 파일로 인한 무한 루프와 버퍼 초과 읽기를 방지하여 프로덕션 안정성 보장
-- **Independent Test**: 조작된 버퍼(무한 루프 유도, 버퍼 초과)를 입력하여 안전하게 종료되는지 확인
-
-- [ ] **T013** 🔀 [US3] 무한 루프 방지 및 버퍼 경계 안전 로직 구현
-  - 파일: `viewer/src/components/metadataParser.js`
+- [ ] **T005** 🔀 [US1] 마스킹된 객체에서 전체 PHI 일괄 조회 테스트 작성 (TC-001)
+  - 파일: `viewer/tests/unit/phiGuard.dumpPhiValues.test.js`
+  - 추적: FR-001, FR-002, FR-005, TC-001
   - 작업 내용:
-    - MAX_TAG_COUNT(10000) 상한 검증 로직 확인 및 보강 (NFR-001, HAZ-5.1)
-    - tagCount 경계 조건: tagCount < MAX_TAG_COUNT에서 tagCount=10000일 때 정상 종료 확인 (EC-006)
-    - ctx.hasRemaining(4) false 시 자연 종료 로직 확인 (NFR-002, HAZ-5.3)
-    - readTag() 예외 발생 시 try-catch에서 에러 기록 후 안전 break 로직 확인 (NFR-005, EC-005)
-    - 각 종료 지점에 디버그용 주석 추가 (어떤 안전 장치가 동작했는지 명시)
-  - 추적: NFR-001, NFR-002, NFR-005, HAZ-5.1, HAZ-5.3, EC-005, EC-006, SC-004
-  - 완료 조건: 10001개 태그 버퍼에서 tagCount=10000에 안전 종료. 버퍼 끝에서 hasRemaining(4) false 시 자연 종료. readTag() 예외 시 에러 기록 후 break.
+    - 테스트 케이스: 마스킹된 객체에서 전체 PHI 일괄 조회
+    - `const metadata = { patientName: '홍길동', patientID: 'P12345', patientBirthDate: '19900101' }` 생성
+    - `maskPhiFields(metadata)` 호출 후 `dumpPhiValues(metadata)` 실행
+    - 반환 객체가 `{ patientName: '홍길동', patientID: 'P12345', patientBirthDate: '19900101' }`임을 검증
+    - `expect(result).toEqual({ patientName: '홍길동', patientID: 'P12345', patientBirthDate: '19900101' })`
+  - 완료 조건: TC-001 테스트 PASS, 마스킹된 metadata에서 원본 3개 필드 값이 정확히 반환됨
 
-- [ ] **T014** 🔒 [US3] 단위 테스트 작성 - 안전성 시나리오
-  - 파일: `viewer/tests/unit/parseMetadata.test.js`
+- [ ] **T006** 🔀 [US1] 빈 PHI 필드 객체 엣지 케이스 테스트 작성 (TC-006)
+  - 파일: `viewer/tests/unit/phiGuard.dumpPhiValues.test.js`
+  - 추적: FR-001, FR-005, TC-006, EC-005
   - 작업 내용:
-    - TC-013: 태그 10001개 버퍼에서 MAX_TAG_COUNT 도달 시 강제 종료 확인 (US3-AS1, SC-004)
-    - TC-014: tagCount 정확히 10000일 때 정상 종료 확인 (EC-006)
-    - TC-015: 버퍼 끝에서 태그 헤더(4바이트) 불충분 시 hasRemaining(4) false로 자연 종료 (US3-AS2)
-    - TC-016: readTag() 내부 예외 발생 시 에러 기록 후 안전 break (US3-AS3, EC-005)
-    - TC-017: 강제 종료 시점까지 수집된 메타데이터가 보존되는지 확인
-  - 추적: SC-004, EC-005, EC-006, NFR-001, NFR-002, NFR-005
-  - 완료 조건: 5개 테스트 케이스 전체 PASS.
----
+    - 테스트 케이스: 빈 PHI 필드 객체
+    - 모든 PHI 필드가 빈 문자열인 metadata: `{ patientName: '', patientID: '', patientBirthDate: '' }`
+    - `maskPhiFields(metadata)` 호출 후 `dumpPhiValues(metadata)` 실행
+    - maskPhiFields는 빈 문자열 필드를 phiStore에 저장하지 않으므로, 빈 객체 `{}` 반환 예상
+    - `expect(result).toEqual({})` 검증
+  - 완료 조건: TC-006 테스트 PASS, 빈 문자열 PHI 필드는 마스킹 이력이 없으므로 빈 객체 반환 확인
 
-## Phase 6: User Story 4 — 픽셀 데이터 그룹 조기 종료 최적화 (Priority: P2)
-
-- **Goal**: 태그 순회 중 픽셀 데이터 그룹(0x7FE0)에 도달하면 순회를 즉시 중단하고 픽셀 데이터 오프셋과 길이를 캐시
-- **Independent Test**: 픽셀 데이터 그룹 앞에 수천 개의 불필요한 태그가 있는 버퍼에서 파싱 시간을 측정하여 조기 종료가 동작하는지 확인
-
-- [ ] **T015** 🔀 [US4] 픽셀 데이터 그룹 조기 종료 및 오프셋 캐싱 구현
-  - 파일: `viewer/src/components/metadataParser.js`
+- [ ] **T007** 🔒 [US1] 일부 PHI 필드만 있는 객체 테스트 작성
+  - 파일: `viewer/tests/unit/phiGuard.dumpPhiValues.test.js`
+  - 추적: FR-001, FR-005
   - 작업 내용:
-    - while 루프 내 readTag() 결과의 group 값을 확인하여 PIXEL_DATA_GROUP(0x7FE0) 이상인지 검사
-    - 조건 충족 시 `_pixelDataOffset = ctx.offset - tagHeaderSize`로 오프셋 기록
-    - `_pixelDataLength = tag.length`로 길이 기록
-    - 즉시 break하여 불필요한 순회 방지
-    - 0x7FE0 이후 태그가 읽히지 않음을 보장하는 가드 조건 추가
-  - 추적: NFR-003, SC-005, FR-2.2
-  - 완료 조건: 0x7FE0 그룹 태그 도달 시 즉시 break. _pixelDataOffset과 _pixelDataLength가 올바르게 기록됨. 0x7FE0 이후 태그가 순회되지 않음.
-
-- [ ] **T016** 🔒 [US4] 단위 테스트 작성 - 조기 종료 시나리오
-  - 파일: `viewer/tests/unit/parseMetadata.test.js`
-  - 작업 내용:
-    - TC-018: 0x7FE0 그룹 포함 버퍼에서 조기 종료 및 오프셋/길이 캐시 확인 (US4-AS1, SC-005)
-    - TC-019: 0x7FE0 그룹 이후에 매칭되는 메타데이터 태그가 있어도 순회되지 않음 확인
-    - TC-020: 0x7FE0 그룹이 없는 버퍼에서는 정상적으로 끝까지 순회됨 확인
-  - 추적: SC-005, NFR-003
-  - 완료 조건: 3개 테스트 케이스 전체 PASS.
+    - 테스트 케이스: 일부 PHI 필드만 존재하는 metadata
+    - `const metadata = { patientName: '홍길동', patientID: 'P12345' }` (patientBirthDate 없음)
+    - `maskPhiFields(metadata)` 후 `dumpPhiValues(metadata)` 실행
+    - 반환 객체가 `{ patientName: '홍길동', patientID: 'P12345' }` (patientBirthDate 키 없음) 임을 검증
+  - 완료 조건: 테스트 PASS, 존재하는 PHI 필드만 반환 객체에 포함됨을 확인
 
 ---
+## Phase 4: User Story 2 — 마스킹 이력 없는 객체에 대한 안전한 빈 반환 (Priority: P1) 🎯 MVP
 
-## Phase 7: User Story 5 — PHI 자동 마스킹 (Priority: P1) 🎯 MVP
+- **Goal**: maskPhiFields()를 거치지 않았거나 phiStore에 등록되지 않은 metadata, null, undefined 입력 시 예외 없이 빈 객체 {}를 안전하게 반환한다.
+- **Independent Test**: maskPhiFields()를 호출하지 않은 순수 metadata 객체 또는 null을 dumpPhiValues()에 전달하여 빈 객체 {}가 반환되는지 확인한다.
+- **추적**: FR-004, NFR-004, SEC-3, US-2, IEC 62304 Class A
 
-- **Goal**: 추출된 메타데이터 중 환자 식별 정보(patientName, patientID, patientBirthDate)를 [REDACTED]로 자동 마스킹
-- **Independent Test**: patientName과 patientID가 포함된 버퍼 파싱 후 metadata 객체에서 해당 필드가 [REDACTED]로 치환되었는지 확인
-
-- [ ] **T017** 🔀 [US5] PHI 마스킹 적용 및 WeakMap 원본 저장 검증
-  - 파일: `viewer/src/components/metadataParser.js`, `viewer/src/components/phiGuard.js`
+- [ ] **T008** 🔀 [US2] null/undefined 입력 안전 반환 테스트 작성 (TC-003, TC-004)
+  - 파일: `viewer/tests/unit/phiGuard.dumpPhiValues.test.js`
+  - 추적: FR-004, NFR-004, SEC-3, TC-003, TC-004, EC-001, EC-002
   - 작업 내용:
-    - maskPhiFields(metadata) 호출 위치가 Step 8(반환 직전)인지 확인
-    - patientName, patientID, patientBirthDate 필드가 [REDACTED]로 치환되는지 검증
-    - phiGuard 모듈의 WeakMap에 원본 값이 안전 저장되는지 확인
-    - WeakMap에서 metadata 객체를 키로 원본 복원 가능한지 검증 (NFR-004)
-    - 마스킹 대상 필드가 빈 문자열인 경우에도 마스킹이 수행되지 않거나 안전하게 처리되는지 확인
-  - 추적: FR-011, FR-4.1, HAZ-3.1, NFR-004, SC-006
-  - 완료 조건: PHI 필드 3개가 [REDACTED]로 마스킹됨. WeakMap에서 원본 복원 가능. 빈 문자열 필드도 안전하게 처리됨.
+    - TC-003: `dumpPhiValues(null)` 호출 → `{}` 반환 검증
+    - TC-004: `dumpPhiValues(undefined)` 호출 → `{}` 반환 검증
+    - 각 케이스에서 예외가 발생하지 않음을 `expect(() => ...).not.toThrow()`로 검증
+    - IEC 62304 Class A 예외 안전성 요구사항 충족 확인
+  - 완료 조건: TC-003, TC-004 테스트 PASS, null/undefined 입력 시 예외 없이 빈 객체 반환
 
-- [ ] **T018** 🔒 [US5] 단위 테스트 작성 - PHI 마스킹 시나리오
-  - 파일: `viewer/tests/unit/parseMetadata.test.js`
+- [ ] **T009** 🔀 [US2] 미마스킹 객체 및 GC된 WeakMap 키 테스트 작성 (TC-002, TC-007)
+  - 파일: `viewer/tests/unit/phiGuard.dumpPhiValues.test.js`
+  - 추적: FR-004, TC-002, TC-007, EC-003, EC-004
   - 작업 내용:
-    - TC-021: patientName, patientID 포함 버퍼에서 마스킹 확인 (US5-AS1, SC-006)
-    - TC-022: WeakMap에서 원본 환자 식별 정보 복원 확인 (US5-AS2)
-    - TC-023: 환자 정보 필드가 빈 문자열인 버퍼에서 마스킹 동작 확인
-    - TC-024: 환자 정보 필드가 누락된 버퍼에서 마스킹 스킵 확인
-  - 추적: SC-006, FR-4.1, HAZ-3.1, NFR-004
-  - 완료 조건: 4개 테스트 케이스 전체 PASS.
----
-
-## Phase 8: Integration & Finalization
-
-- [ ] **T019** 🔒 통합 테스트 실행 및 회귀 검증
-  - 파일: `viewer/tests/integration/dicomParser.test.js`, `viewer/src/data/dicomParser.js`
-  - 작업 내용:
-    - 기존 dicomParser.test.js 통합 테스트 전체 실행 및 통과 확인
-    - parseDICOM() -> parseMetadata() 호출 체인 정상 동작 검증
-    - 전체 파싱 파이프라인 회귀 없음 확인
-    - parseMetadata() 단위 테스트 전체 재실행 및 통과 확인
-    - 테스트 커버리지 90% 이상 달성 확인
-  - 추적: SC-001 ~ SC-007 전체
-  - 완료 조건: 기존 통합 테스트 전체 PASS. parseMetadata() 단위 테스트 전체 PASS. 커버리지 90% 이상. 회귀 이슈 없음.
-
-- [ ] **T020** 🔒 엣지 케이스 종합 검증 및 코드 정리
-  - 파일: `viewer/src/components/metadataParser.js`, `viewer/tests/unit/parseMetadata.test.js`
-  - 작업 내용:
-    - EC-001 ~ EC-008 전체 시나리오에 대한 테스트 커버리지 재확인
-    - JSDoc 주석 작성: 함수 시그니처, 파라미터 타입, 반환값 구조, 예외 목록
-    - 코드 리뷰 체크리스트 기반 자가 검토 (SOLID, 레이어 분리, 에러 처리, 보안)
-    - 디버그용 console.log 제거
-    - TODO/FIXME 주석 잔여 확인
-  - 추적: EC-001 ~ EC-008, NFR 전체
-  - 완료 조건: EC-001 ~ EC-008 테스트 케이스 모두 존재 및 PASS. JSDoc 주석 완비. 불필요한 로깅/주석 제거.
-
-- [ ] **T021** 🔒 문서 업데이트 및 git commit/push
-  - 파일: `docs/spec-kit/03_tasks.md`, `docs/artifacts/SDS.md` (필요시)
-  - 작업 내용:
-    - 03_tasks.md의 체크리스트 항목 완료 표시 업데이트
-    - SDS.md에 SDS-3.9 parseMetadata() 구현 상태 업데이트
-    - git commit: `feat(PLAYG-1828): parseMetadata() 9단계 파싱 구현 및 테스트 완료`
-    - 원격 브랜치 push: `feature/PLAYG-1828-parse-metadata`
-  - 추적: PLAYG-1828
-  - 완료 조건: 원격 브랜치 push 완료. SDS.md 업데이트 반영.
+    - TC-002: maskPhiFields() 미호출 객체 → `dumpPhiValues(metadata)` → `{}` 반환 검증
+    - TC-007: WeakRef + gc를 활용하여 GC된 키 객체 테스트 (가능한 환경에서만)
+      ```javascript
+      let metadata = { patientName: 'test' };
+      maskPhiFields(metadata);
+      const weakRef = new WeakRef(metadata);
+      metadata = null; // 참조 해제
+      // GC 후 weakRef.deref()가 undefined면 dumpPhiValues도 {} 반환
+      ```
+    - GC 테스트는 Node.js 환경에서 `--expose-gc` 플래그 필요 시 별도 스킵 처리
+  - 완료 조건: TC-002 테스트 PASS, TC-007은 환경 지원 시 PASS (미지원 시 skip)
 
 ---
+## Phase 5: User Story 3 — 반환값 캡슐화 및 데이터 무결성 보장 (Priority: P2)
 
+- **Goal**: dumpPhiValues() 반환값이 phiStore 내부 참조가 아닌 얕은 복사본임을 보장하여, 호출자가 반환 객체를 수정해도 phiStore 원본이 변경되지 않도록 캡슐화를 검증한다.
+- **Independent Test**: dumpPhiValues() 반환 객체의 속성을 변경한 후, 동일 metadata로 다시 dumpPhiValues()를 호출하여 원본이 보존되었는지 확인한다.
+- **추적**: FR-003, NFR-001, SEC-3, US-3, TD-01
+
+- [ ] **T010** 🔀 [US3] 반환값 수정 후 원본 무결성 테스트 작성 (TC-005, TC-008)
+  - 파일: `viewer/tests/unit/phiGuard.dumpPhiValues.test.js`
+  - 추적: FR-003, NFR-001, SEC-3, TC-005, TC-008, EC-006
+  - 작업 내용:
+    - TC-005: 반환값 수정 후 원본 무결성 검증
+      ```javascript
+      const metadata = { patientName: '홍길동', patientID: 'P12345', patientBirthDate: '19900101' };
+      maskPhiFields(metadata);
+      const result1 = dumpPhiValues(metadata);
+      result1.patientName = '변경값';  // 반환값 수정
+      const result2 = dumpPhiValues(metadata);
+      expect(result2.patientName).toBe('홍길동'); // 원본 불변
+      ```
+    - TC-008: 반환 객체에 새 속성 추가 후 phiStore 내부 영향 없음 검증
+      ```javascript
+      const result = dumpPhiValues(metadata);
+      result.newProp = '추가속성';
+      const resultAgain = dumpPhiValues(metadata);
+      expect(resultAgain.newProp).toBeUndefined(); // 내부에 영향 없음
+      ```
+    - EC-006: 반환값 수정 후 동일 metadata로 재조회 시 원본 보존 검증
+  - 완료 조건: TC-005, TC-008 테스트 PASS, 반환 객체 수정이 phiStore 내부에 영향 없음 확인
+
+- [ ] **T011** 🔀 [US3] 반환값이 새 객체 참조임을 검증하는 테스트 작성
+  - 파일: `viewer/tests/unit/phiGuard.dumpPhiValues.test.js`
+  - 추적: FR-003, NFR-001
+  - 작업 내용:
+    - 동일 metadata로 dumpPhiValues()를 두 번 호출하여 서로 다른 객체 참조임을 검증
+      ```javascript
+      const result1 = dumpPhiValues(metadata);
+      const result2 = dumpPhiValues(metadata);
+      expect(result1).not.toBe(result2);  // 참조 다름
+      expect(result1).toEqual(result2);   // 값은 동일
+      ```
+    - 매 호출 시 새 객체가 생성됨(얕은 복사)을 보장
+  - 완료 조건: 테스트 PASS, 매 호출 시 새 객체 참조 생성 확인
+
+---
+## Phase 6: User Story 4 — 프로덕션 환경 접근 제한 (Priority: P2)
+
+- **Goal**: 프로덕션 빌드에서 dumpPhiValues() 함수가 트리쉐이킹에 의해 제외됨을 검증하고, PHI 정보 콘솔/네트워크 전송 금지 정책을 문서화한다.
+- **Independent Test**: 프로덕션 빌드 산출물에서 dumpPhiValues() 함수가 포함되지 않았는지 번들 분석으로 확인한다.
+- **추적**: NFR-002, NFR-003, SEC-3, HAZ-3.1, US-4, TD-03, TD-04
+
+- [ ] **T012** 🔀 [US4] 프로덕션 빌드 트리쉐이킹 검증
+  - 파일: 빌드 설정 파일(`vite.config.js` 또는 `rollup.config.js`), `viewer/src/data/dicomParser/index.js`
+  - 추적: NFR-002, TD-03
+  - 작업 내용:
+    - 프로덕션 빌드 실행 (`npm run build` 또는 `vite build`)
+    - 빌드 산출물 번들에서 `dumpPhiValues` 문자열 검색으로 포함 여부 확인
+    - `index.js`에서 re-export되지 않으므로 트리쉐이킹 자동 제외 예상
+    - 번들 분석 결과를 스크린샷 또는 로그로 캡처하여 문서화
+  - 완료 조건: 프로덕션 빌드 산출물에 dumpPhiValues 함수 코드 미포함 확인
+
+- [ ] **T013** 🔀 [US4] PHI 정보 취급 정책 주석 및 JSDoc 보강
+  - 파일: `viewer/src/data/dicomParser/phiGuard.js`
+  - 추적: NFR-003, HAZ-3.1, TD-04
+  - 작업 내용:
+    - dumpPhiValues() JSDoc에 다음 경고 주석 추가:
+      ```
+      * @warning 반환된 객체에는 민감한 PHI 정보가 포함되어 있습니다.
+      *          콘솔 출력(console.log) 및 외부 전송(fetch/XHR)은 엄격히 금지됩니다.
+      *          추적: HAZ-3.1, NFR-003
+      ```
+    - `@internal` 태그 유지 확인 (API 문서에서 자동 제외)
+    - 함수 시그니처 위에 프로덕션 사용 금지 주석 강화
+  - 완료 조건: JSDoc에 PHI 정보 취급 경고 및 @internal 태그 포함, 코드 리뷰 가능 상태
+
+---
+## Phase 7: Integration & Finalization
+
+- [ ] **T-INT-01** 🔒 기존 테스트 스위트 회귀 검증
+  - 파일: `viewer/tests/unit.test.js`, `viewer/tests/dicomDictionary.test.js`, 기타 기존 테스트 파일
+  - 추적: 전체 FR, NFR, IEC 62304 Class A
+  - 작업 내용:
+    - `npm test` 또는 `npx jest` 실행하여 기존 전체 테스트 통과 확인
+    - 기존 251개 테스트(또는 현재 총 테스트 수) 중 실패 없음 확인
+    - 신규 `phiGuard.dumpPhiValues.test.js` 8개 테스트 전부 PASS 확인
+    - `parseDICOM() → maskPhiFields() → getPhiValue()` 호출 체인에 영향 없음 검증
+    - `maskPhiFields()`, `getPhiValue()` 기존 동작 회귀 없음 확인
+  - 완료 조건: 전체 테스트 PASS (기존 + 신규 8개), 회귀 없음
+
+- [ ] **T-INT-02** 🔒 코드 리뷰 및 최종 산출물 검증
+  - 파일: `viewer/src/data/dicomParser/phiGuard.js`, `viewer/tests/unit/phiGuard.dumpPhiValues.test.js`
+  - 추적: 전체 FR, NFR, DoD
+  - 작업 내용:
+    - dumpPhiValues() 구현이 01_spec.md의 FR-001 ~ FR-006 모두 충족하는지 체크리스트 검증
+    - NFR-001 ~ NFR-004 모두 충족 확인
+    - Edge Case EC-001 ~ EC-006 테스트 커버리지 확인
+    - IEC 62304 Class A 안전 등급 요구사항 (예외 안전성) 충족 확인
+    - Definition of Done 체크리스트 항목별 확인
+    - 함수 로직이 3줄 이하로 유지되었는지 검증 (가독성/검증 가능성)
+  - 완료 조건: DoD 체크리스트 전체 PASS, 코드 리뷰 승인 가능 상태
+
+- [ ] **T-INT-03** 🔒 git commit 및 원격 브랜치 push
+  - 파일: 변경된 전체 파일
+  - 작업 내용:
+    - `git add viewer/src/data/dicomParser/phiGuard.js`
+    - `git add viewer/tests/unit/phiGuard.dumpPhiValues.test.js`
+    - `git commit -m 'feat(PHIGUARD): dumpPhiValues() 얕은 복사 반환 보강 - PLAYG-1833'`
+    - `git push origin feature/PLAYG-1833-dump-phi-values`
+  - 완료 조건: 원격 브랜치 push 완료, CI 파이프라인 통과
+
+---
 ## Dependencies & Execution Order
 
 ```
-Phase 1 - Setup:            T001 -> T002 -> T003
-                                            |
-Phase 2 - Foundational:     T004 -> T005
-                                            |
-Phase 3 - US1 메타데이터:    T006 -> T007 -> T008 -> T009 -> T010
-                                            |
-Phase 4 - US2 필수태그:     T011 -> T012
-Phase 5 - US3 무한루프:     T013 -> T014    -- 병렬 가능
-Phase 6 - US4 조기종료:     T015 -> T016    -- 병렬 가능
-Phase 7 - US5 PHI마스킹:    T017 -> T018    -- 병렬 가능
-                                            |
-Phase 8 - Integration:      T019 -> T020 -> T021
+Phase 1 (Setup):
+  T001 (코드 분석) → T002 (테스트 환경 구성)
+
+Phase 2 (Foundational):
+  T003 (코어 구현 - 얕은 복사 보강) → T004 (배럴 파일/트리쉐이킹 확인)
+
+Phase 3 (US1 - PHI 일괄 조회):
+  T005 (TC-001) 🔀
+  T006 (TC-006) 🔀  ── 모두 T003 완료 후 병렬 가능
+  T007 (일부 필드) 🔀
+
+Phase 4 (US2 - 안전한 빈 반환):
+  T008 (TC-003/004) 🔀  ── T003 완료 후 병렬 가능
+  T009 (TC-002/007) 🔀  ── T003 완료 후 병렬 가능
+
+Phase 5 (US3 - 캡슐화 검증):
+  T010 (TC-005/008) 🔀  ── T003 완료 후 병렬 가능
+  T011 (참조 검증)  🔀  ── T003 완료 후 병렬 가능
+
+Phase 6 (US4 - 프로덕션 제한):
+  T012 (트리쉐이킹)  🔀  ── T004 완료 후
+  T013 (JSDoc 보강)  🔀  ── T003 완료 후 병렬 가능
+
+Phase 7 (Integration):
+  T-INT-01 (회귀 검증) → T-INT-02 (최종 검증) → T-INT-03 (commit/push)
 ```
-
-**병렬 실행 가능 그룹** (Phase 3 완료 후):
-- T011(US2) + T013(US3) + T015(US4) + T017(US5) 은 서로 독립적이므로 🔀 병렬 구현 가능
-- 단, T012, T014, T016, T018 테스트는 각 선행 구현 태스크 완료 후 🔒 순차 실행
-
----
 
 ## Estimated Effort
 
-| Phase        | 태스크 수 | 예상 소요 시간 |
-| ------------ | --------- | -------------- |
-| Phase 1: Setup          | 3  | 3시간  |
-| Phase 2: Foundational   | 2  | 3시간  |
-| Phase 3: US1 메타데이터 추출 (P1) | 5  | 8시간  |
-| Phase 4: US2 필수 태그 검증 (P1) | 2  | 3시간  |
-| Phase 5: US3 무한루프 방지 (P1)  | 2  | 3시간  |
-| Phase 6: US4 조기 종료 (P2)      | 2  | 2시간  |
-| Phase 7: US5 PHI 마스킹 (P1)     | 2  | 3시간  |
-| Phase 8: Integration    | 3  | 3시간  |
-| **합계**                | **21** | **28시간** |
+| Phase                 | 태스크 수 | 예상 소요 시간 |
+| --------------------- | --------- | -------------- |
+| Phase 1: Setup        | 2         | 1.5시간        |
+| Phase 2: Foundational | 2         | 1.5시간        |
+| Phase 3: US1 (P1 MVP) | 3         | 1.5시간        |
+| Phase 4: US2 (P1 MVP) | 2         | 1.0시간        |
+| Phase 5: US3 (P2)     | 2         | 1.0시간        |
+| Phase 6: US4 (P2)     | 2         | 1.5시간        |
+| Phase 7: Integration  | 3         | 1.0시간        |
+| **합계**              | **16**    | **9.0시간**    |
 
----
-
-## Traceability Matrix
-
-| 태스크   | 관련 FR         | 관련 HAZ        | 관련 EC         | 관련 SC         |
-| -------- | --------------- | --------------- | --------------- | --------------- |
-| T001     | FR-2.2, FR-2.3  | HAZ-5.1, HAZ-5.3 | -               | -               |
-| T002     | FR-1.3          | HAZ-1.3          | -               | -               |
-| T003     | -               | -                | EC-001~EC-008   | -               |
-| T004     | FR-001, FR-003~005 | -             | -               | -               |
-| T005     | FR-001, FR-002  | -                | EC-001, EC-002  | -               |
-| T006     | FR-003~005      | -                | EC-003          | SC-007          |
-| T007     | FR-006, FR-007, FR-2.2, FR-2.3 | HAZ-5.1, HAZ-5.3 | EC-005, EC-006 | SC-004 |
-| T008     | FR-008~010, FR-1.3 | HAZ-1.3      | EC-004, EC-007, EC-008 | SC-002, SC-003 |
-| T009     | FR-011, FR-012, FR-4.1 | HAZ-3.1 | -               | SC-006          |
-| T010     | -               | -                | EC-001~EC-003   | SC-001, SC-007  |
-| T011     | FR-008, FR-1.3  | HAZ-1.3          | EC-004          | SC-002          |
-| T012     | FR-008          | -                | EC-004          | SC-002          |
-| T013     | -               | HAZ-5.1, HAZ-5.3 | EC-005, EC-006  | SC-004          |
-| T014     | -               | HAZ-5.1, HAZ-5.3 | EC-005, EC-006  | SC-004          |
-| T015     | FR-2.2          | -                | -               | SC-005          |
-| T016     | -               | -                | -               | SC-005          |
-| T017     | FR-011, FR-4.1  | HAZ-3.1          | -               | SC-006          |
-| T018     | FR-4.1          | HAZ-3.1          | -               | SC-006          |
-| T019     | FR-001~012      | HAZ-1.3, HAZ-3.1, HAZ-5.1, HAZ-5.3 | - | SC-001~SC-007 |
-| T020     | -               | -                | EC-001~EC-008   | -               |
-| T021     | -               | -                | -               | -               |
+> **참고**: Phase 3~6의 태스크는 T003(코어 구현) 완료 후 병렬 실행 가능하므로,
+> 실제 소요 시간은 순차 실행 기준 9.0시간에서 병렬 시 ~5~6시간으로 단축 가능합니다.
