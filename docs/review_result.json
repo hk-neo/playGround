@@ -1,263 +1,63 @@
 {
-  "status": "FAIL",
+  "status": "PASS",
   "critical_count": 0,
-  "high_count": 5,
+  "high_count": 0,
   "issues": [
     {
       "id": "ARCH-1",
-      "severity": "HIGH",
-      "description": "parseMetadata() 단일 함수 과다 책임 (9단계 파싱 절차)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "metadataParser.js parseMetadata()"
+      "severity": "MEDIUM",
+      "description": "maskPhiFields 중복 호출 시 원본 PHI 값이 [REDACTED]로 덮어씌워지는 멱등성 부족. phiStore.get(metadata) 기존 값을 보존하고 metadata[field] !== PHI_MASK 가드 추가로 수정.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
+      "fixed": true
     },
     {
       "id": "ARCH-2",
-      "severity": "HIGH",
-      "description": "비즈니스 기본값이 파서 레이어에 하드코딩 (windowCenter=40, windowWidth=400 등)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "metadataParser.js Step 7"
+      "severity": "LOW",
+      "description": "Object.keys(originals).length > 0 대신 hasNewOriginals 플래그 사용으로 불필요한 임시 배열 생성 제거 가능. 현재 3개 항목이므로 실질적 영향은 미미함.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
+      "fixed": true
     },
     {
       "id": "ARCH-3",
-      "severity": "HIGH",
-      "description": "기본값 3곳 중복 정의 (constants/METADATA_TAGS vs metadataParser vs createDICOMMetadata)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "constants.js + metadataParser.js + DICOMMetadata.js"
-    },
-    {
-      "id": "ARCH-4",
-      "severity": "MEDIUM",
-      "description": "에러 처리 방식 불일치 (throw ParseError vs push 평범한 객체)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "metadataParser.js"
-    },
-    {
-      "id": "ARCH-5",
-      "severity": "MEDIUM",
-      "description": "readTag 예외 시 severity:warning 격하 (DicomIOException 등 치명적 예외 포함)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "metadataParser.js Step 4"
-    },
-    {
-      "id": "ARCH-6",
-      "severity": "MEDIUM",
-      "description": "constants.js 다중 관심사 혼재 (파일구조/에러코드/에러메시지/태그사전/매직바이트)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "constants.js"
-    },
-    {
-      "id": "ARCH-7",
-      "severity": "MEDIUM",
-      "description": "pixelSpacing 정규화 로직 인라인 하드코딩",
-      "fixed": false,
-      "category": "Architect",
-      "location": "metadataParser.js"
-    },
-    {
-      "id": "ARCH-8",
       "severity": "LOW",
-      "description": "required:true 태그 누락 시 기본값 제공 정책 모순",
-      "fixed": false,
-      "category": "Architect",
-      "location": "metadataParser.js"
-    },
-    {
-      "id": "ARCH-9",
-      "severity": "LOW",
-      "description": "maskPhiFields mutable 변환 (CQS 위반)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "phiGuard.js"
-    },
-    {
-      "id": "ARCH-10",
-      "severity": "LOW",
-      "description": "범용 매직바이트 상수가 DICOM 상수 파일에 위치",
-      "fixed": false,
-      "category": "Architect",
-      "location": "constants.js"
+      "description": "getPhiValue의 PHI_FIELDS.includes(field)가 선형 검색(O(n)). PHI_FIELDS가 3개뿐이므로 Set 전환은 과최적화. 수용 가능.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
+      "fixed": false
     },
     {
       "id": "SEC-1",
       "severity": "MEDIUM",
-      "description": "dumpPhiValues 함수 모듈 레벨 직접 접근 가능 (PHI 평문 일괄 반환)",
-      "fixed": false,
-      "category": "Security",
-      "location": "phiGuard.js"
+      "description": "maskPhiFields가 입력 객체를 직접 변이(mutation). 의도적 설계이며 metadataParser.js Step 8에서만 호출되어 실제 위험은 낮음. clone 후 반환 대안 고려 가능하나 성능 트레이드오프.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
+      "fixed": false
     },
     {
       "id": "SEC-2",
       "severity": "LOW",
-      "description": "getPhiValue 필드명 화이트리스트 확장 시 취약 가능성",
-      "fixed": false,
-      "category": "Security",
-      "location": "phiGuard.js"
-    },
-    {
-      "id": "SEC-3",
-      "severity": "MEDIUM",
-      "description": "readTag 예외 원시 메시지에 내부 구조(오프셋, 태그 hex) 노출 가능",
-      "fixed": false,
-      "category": "Security",
-      "location": "metadataParser.js Step 4"
-    },
-    {
-      "id": "SEC-4",
-      "severity": "LOW",
-      "description": "PHI 원본 값 WeakMap 메모리 잔존 (GC까지 평문 유지)",
-      "fixed": false,
-      "category": "Security",
-      "location": "phiGuard.js"
+      "description": "dumpPhiValues가 배럴(index.js)에서 미노출이지만 소스 경로 직접 import로 접근 가능. @internal 태그로 문서화되어 있으나 런타임 접근 제어는 없음. 디버깅 목적이므로 수용 가능.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
+      "fixed": false
     },
     {
       "id": "PERF-1",
-      "severity": "MEDIUM",
-      "description": "makeTagKey() 루프 내 반복 문자열 할당 (최대 20000회)",
-      "fixed": false,
-      "category": "Performance",
-      "location": "metadataParser.js while 루프"
-    },
-    {
-      "id": "PERF-2",
       "severity": "LOW",
-      "description": "METADATA_TAGS 사전 조회 시 매 반복 makeTagKey 문자열 생성",
-      "fixed": false,
-      "category": "Performance",
-      "location": "metadataParser.js"
-    },
-    {
-      "id": "PERF-3",
-      "severity": "LOW",
-      "description": "Object.entries(METADATA_TAGS) 매 호출 시 새 배열 생성",
-      "fixed": false,
-      "category": "Performance",
-      "location": "metadataParser.js Step 5"
-    },
-    {
-      "id": "PERF-4",
-      "severity": "MEDIUM",
-      "description": "readString() 매 호출 시 new Uint8Array 뷰 생성",
-      "fixed": false,
-      "category": "Performance",
-      "location": "ParseContext.js"
-    },
-    {
-      "id": "PERF-7",
-      "severity": "MEDIUM",
-      "description": "skipUndefinedLengthSequence 재귀 호출 (최대 16단계)",
-      "fixed": false,
-      "category": "Performance",
-      "location": "tagReader.js"
-    },
-    {
-      "id": "PERF-8",
-      "severity": "MEDIUM",
-      "description": "parseMetadata + parseMetaGroup 간 DataView 중복 생성",
-      "fixed": false,
-      "category": "Performance",
-      "location": "metadataParser.js"
-    },
-    {
-      "id": "PERF-10",
-      "severity": "MEDIUM",
-      "description": "ParseContext.errors 배열 무제한 증가 가능",
-      "fixed": false,
-      "category": "Performance",
-      "location": "ParseContext.js"
+      "description": "maskPhiFields에서 phiStore.get(metadata)를 두 번 호출 (존재 확인 + 값 조회). 변수에 캐싱으로 최적화 가능하나 3개 필드라 무의미함. 수정 시 hasNewOriginals 플래그 도입으로 일부 해결됨.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
+      "fixed": false
     },
     {
       "id": "CQ-1",
       "severity": "MEDIUM",
-      "description": "PIXEL_DATA_GROUP 상수 중복 정의 (PIXEL_DATA_TAG.group과 동일)",
-      "fixed": true,
-      "category": "CodeQuality",
-      "location": "metadataParser.js"
+      "description": "maskPhiFields 멱등성 부족 - 중복 호출 시 원본 값 손실. ARCH-1과 동일 이슈. phiStore 기존 값 보존 + PHI_MASK 가드 추가로 수정 완료. 테스트도 멱등성 검증으로 업데이트.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
+      "fixed": true
     },
     {
-      "id": "CQ-4",
-      "severity": "HIGH",
-      "description": "|| 연산자로 falsy 값(0) 의도치 않은 덮어쓰기 (bitsAllocated, pixelRepresentation 등)",
-      "fixed": true,
-      "category": "CodeQuality",
-      "location": "metadataParser.js Step 7"
-    },
-    {
-      "id": "CQ-12",
-      "severity": "MEDIUM",
-      "description": "ctx.errors(태그 읽기 예외)가 반환 errors에 누락됨",
-      "fixed": true,
-      "category": "CodeQuality",
-      "location": "metadataParser.js Step 9"
-    },
-    {
-      "id": "CQ-3",
-      "severity": "HIGH",
-      "description": "필수 태그 누락 시 0값 전달로 다운스트림(렌더링)에서 0 나누기 위험",
-      "fixed": false,
-      "category": "CodeQuality",
-      "location": "metadataParser.js Step 7"
-    },
-    {
-      "id": "CQ-5",
-      "severity": "MEDIUM",
-      "description": "pixelSpacing 빈 배열/1요소 배열 엣지 케이스 처리 보강 필요",
-      "fixed": true,
-      "category": "CodeQuality",
-      "location": "metadataParser.js"
-    },
-    {
-      "id": "CQ-6",
-      "severity": "MEDIUM",
-      "description": "범용 매직바이트 상수(MAGIC_TABLE)가 DICOM 파서 상수 파일에 위치",
-      "fixed": false,
-      "category": "CodeQuality",
-      "location": "constants.js"
-    },
-    {
-      "id": "CQ-7",
-      "severity": "MEDIUM",
-      "description": "DICOM Type 1 태그(studyInstanceUID, seriesInstanceUID)가 required:false",
-      "fixed": false,
-      "category": "CodeQuality",
-      "location": "constants.js METADATA_TAGS"
-    },
-    {
-      "id": "CQ-8",
-      "severity": "HIGH",
-      "description": "ParseContext.readString/readBytes 경계 검사 누락 (RangeError 가능)",
-      "fixed": false,
-      "category": "CodeQuality",
-      "location": "ParseContext.js"
-    },
-    {
-      "id": "CQ-9",
-      "severity": "MEDIUM",
-      "description": "preParsedMeta.metaEndOffset undefined 미검사",
-      "fixed": false,
-      "category": "CodeQuality",
-      "location": "metadataParser.js Step 2"
-    },
-    {
-      "id": "CQ-10",
+      "id": "CQ-2",
       "severity": "LOW",
-      "description": "ERROR_MESSAGES에 PARSE_WARN_OPTIONAL_TAG_MISSING 키 누락",
-      "fixed": true,
-      "category": "CodeQuality",
-      "location": "constants.js"
-    },
-    {
-      "id": "CQ-11",
-      "severity": "MEDIUM",
-      "description": "createDICOMMetadata 기본값과 METADATA_TAGS 기본값 불일치 (windowCenter: 0 vs 40)",
-      "fixed": false,
-      "category": "CodeQuality",
-      "location": "DICOMMetadata.js vs constants.js"
+      "description": "테스트에 하드코딩된 환자 정보('홍길동', 'P001', '19900101')가 여러 테스트케이스에 반복됨. 상수 추출 또는 팩토리 함수 분리 권장.",
+      "file": "viewer/tests/unit.test.js",
+      "fixed": false
     }
   ]
 }

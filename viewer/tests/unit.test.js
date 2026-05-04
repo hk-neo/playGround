@@ -1073,7 +1073,7 @@ describe("phiGuard - PHI 마스킹 보안 가드", () => {
   // WeakMap GC 연동 및 메모리 안전성 (US-4, TC-2)
   // ----------------------------------------------------------
   describe("WeakMap GC 연동 및 독립성", () => {
-    it("동일 metadata 객체에 중복 maskPhiFields 호출 시 마스킹된 값 유지", () => {
+    it("동일 metadata 객체에 중복 maskPhiFields 호출 시 원본 값이 보존되어야 한다 (멱등성)", () => {
       const meta = createDICOMMetadata({
         patientName: "홍길동",
         patientID: "P001",
@@ -1081,12 +1081,13 @@ describe("phiGuard - PHI 마스킹 보안 가드", () => {
       });
       maskPhiFields(meta);
       // 이미 [REDACTED]로 마스킹된 상태에서 재호출
-      // maskPhiFields는 덮어쓰기 방식이므로 [REDACTED]가 원본으로 저장됨
       maskPhiFields(meta);
-      // 여전히 마스킹 상태 유지
+      // 마스킹 상태 유지
       expect(meta.patientName).toBe("[REDACTED]");
-      // 덮어쓰기로 인해 두 번째 마스킹 시 [REDACTED]가 원본으로 저장됨
-      expect(getPhiValue(meta, "patientName")).toBe("[REDACTED]");
+      // 멱등성: 두 번째 호출에서도 원본 값 보존
+      expect(getPhiValue(meta, "patientName")).toBe("홍길동");
+      expect(getPhiValue(meta, "patientID")).toBe("P001");
+      expect(getPhiValue(meta, "patientBirthDate")).toBe("19900101");
     });
 
     it("서로 다른 metadata 객체는 독립적인 phiStore 엔트리를 가져야 한다", () => {

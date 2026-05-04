@@ -44,17 +44,20 @@ export function maskPhiFields(metadata) {
     return metadata;
   }
 
-  const originals = {};
+  // 기존 원본 값 보존 (멱등성 보장: 중복 호출 시 원본 덮어쓰기 방지)
+  const originals = phiStore.get(metadata) ? { ...phiStore.get(metadata) } : {};
+  let hasNewOriginals = false;
 
   for (const field of PHI_FIELDS) {
-    if (metadata[field] !== undefined && metadata[field] !== '') {
+    if (metadata[field] !== undefined && metadata[field] !== '' && metadata[field] !== PHI_MASK) {
       originals[field] = metadata[field];
+      hasNewOriginals = true;
       metadata[field] = PHI_MASK;
     }
   }
 
-  // 원본 값을 WeakMap에 저장 (GC 안전)
-  if (Object.keys(originals).length > 0) {
+  // 새로 마스킹된 필드가 있거나 기존 원본이 있으면 저장
+  if (hasNewOriginals || phiStore.has(metadata)) {
     phiStore.set(metadata, originals);
   }
 
