@@ -941,3 +941,84 @@ describe("PHI 가드", () => {
     expect(maskPhiFields(null)).toBeNull();
   });
 });
+
+// ============================================================
+// SDS-3.13 getPhiValue() 단위 테스트 (TC-13.1 ~ TC-13.8)
+// 추적: PLAYG-1832 | FR-4.1, SEC-3, NFR-4
+// ============================================================
+
+describe("SDS-3.13 getPhiValue() PHI 원본 안전조회", () => {
+  // TC-13.1: 인가 필드 patientName 원본 조회 (FR-4.1)
+  it("TC-13.1: 원본 patientName을 반환해야 한다", () => {
+    const meta = createDICOMMetadata({
+      patientName: "홍길동",
+      patientID: "P001",
+      patientBirthDate: "19900101",
+    });
+    maskPhiFields(meta);
+    expect(getPhiValue(meta, "patientName")).toBe("홍길동");
+  });
+
+  // TC-13.2: 인가 필드 patientID 원본 조회 (FR-4.1)
+  it("TC-13.2: 원본 patientID를 반환해야 한다", () => {
+    const meta = createDICOMMetadata({
+      patientName: "홍길동",
+      patientID: "P001",
+      patientBirthDate: "19900101",
+    });
+    maskPhiFields(meta);
+    expect(getPhiValue(meta, "patientID")).toBe("P001");
+  });
+
+  // TC-13.3: 인가 필드 patientBirthDate 원본 조회 (FR-4.1)
+  it("TC-13.3: 원본 patientBirthDate를 반환해야 한다", () => {
+    const meta = createDICOMMetadata({
+      patientName: "홍길동",
+      patientID: "P001",
+      patientBirthDate: "19900101",
+    });
+    maskPhiFields(meta);
+    expect(getPhiValue(meta, "patientBirthDate")).toBe("19900101");
+  });
+
+  // TC-13.4: 비 PHI 필드(rows) 조회 차단 (SEC-3)
+  it("TC-13.4: 비인가 필드 'rows'는 undefined를 반환해야 한다", () => {
+    const meta = createDICOMMetadata({
+      patientName: "홍길동",
+      patientID: "P001",
+    });
+    maskPhiFields(meta);
+    expect(getPhiValue(meta, "rows")).toBeUndefined();
+  });
+
+  // TC-13.5: 존재하지 않는 필드 조회 차단 (SEC-3)
+  it("TC-13.5: 존재하지 않는 필드 'unknownField'는 undefined를 반환해야 한다", () => {
+    const meta = createDICOMMetadata({
+      patientName: "홍길동",
+    });
+    maskPhiFields(meta);
+    expect(getPhiValue(meta, "unknownField")).toBeUndefined();
+  });
+
+  // TC-13.6: 마스킹되지 않은 일반 객체 (FR-4.1)
+  it("TC-13.6: 마스킹되지 않은 객체는 undefined를 반환해야 한다", () => {
+    const plainObj = { patientName: "홍길동", patientID: "P001" };
+    expect(getPhiValue(plainObj, "patientName")).toBeUndefined();
+  });
+
+  // TC-13.7: null 메타데이터 (NFR-4)
+  it("TC-13.7: null 메타데이터에 대해 undefined를 반환해야 한다", () => {
+    expect(getPhiValue(null, "patientName")).toBeUndefined();
+  });
+
+  // TC-13.8: 빈 문자열 원본 (FR-4.1)
+  it("TC-13.8: 빈 문자열 원본은 undefined를 반환해야 한다", () => {
+    const meta = createDICOMMetadata({
+      patientName: "",
+      patientID: "",
+      patientBirthDate: "",
+    });
+    maskPhiFields(meta);
+    expect(getPhiValue(meta, "patientName")).toBeUndefined();
+  });
+});
