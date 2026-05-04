@@ -1,263 +1,88 @@
 {
-  "status": "FAIL",
+  "status": "PASS",
   "critical_count": 0,
-  "high_count": 5,
+  "high_count": 0,
   "issues": [
     {
       "id": "ARCH-1",
-      "severity": "HIGH",
-      "description": "parseMetadata() 단일 함수 과다 책임 (9단계 파싱 절차)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "metadataParser.js parseMetadata()"
+      "severity": "MEDIUM",
+      "description": "findPixelDataTag()가 JSDoc에서 module-private로 설계되었으나 실제로는 export됨. 테스트 접근을 위해 export한 것은 이해되나, 프로덕션 코드에서 직접 import하는 것을 방지하는 네이밍 컨벤션 또는 별도 테스트 유틸 경로 분리 검토 필요.",
+      "location": "viewer/src/data/dicomParser/pixelDataParser.js:findPixelDataTag",
+      "fixed": false
     },
     {
       "id": "ARCH-2",
-      "severity": "HIGH",
-      "description": "비즈니스 기본값이 파서 레이어에 하드코딩 (windowCenter=40, windowWidth=400 등)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "metadataParser.js Step 7"
-    },
-    {
-      "id": "ARCH-3",
-      "severity": "HIGH",
-      "description": "기본값 3곳 중복 정의 (constants/METADATA_TAGS vs metadataParser vs createDICOMMetadata)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "constants.js + metadataParser.js + DICOMMetadata.js"
-    },
-    {
-      "id": "ARCH-4",
-      "severity": "MEDIUM",
-      "description": "에러 처리 방식 불일치 (throw ParseError vs push 평범한 객체)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "metadataParser.js"
-    },
-    {
-      "id": "ARCH-5",
-      "severity": "MEDIUM",
-      "description": "readTag 예외 시 severity:warning 격하 (DicomIOException 등 치명적 예외 포함)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "metadataParser.js Step 4"
-    },
-    {
-      "id": "ARCH-6",
-      "severity": "MEDIUM",
-      "description": "constants.js 다중 관심사 혼재 (파일구조/에러코드/에러메시지/태그사전/매직바이트)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "constants.js"
-    },
-    {
-      "id": "ARCH-7",
-      "severity": "MEDIUM",
-      "description": "pixelSpacing 정규화 로직 인라인 하드코딩",
-      "fixed": false,
-      "category": "Architect",
-      "location": "metadataParser.js"
-    },
-    {
-      "id": "ARCH-8",
       "severity": "LOW",
-      "description": "required:true 태그 누락 시 기본값 제공 정책 모순",
-      "fixed": false,
-      "category": "Architect",
-      "location": "metadataParser.js"
-    },
-    {
-      "id": "ARCH-9",
-      "severity": "LOW",
-      "description": "maskPhiFields mutable 변환 (CQS 위반)",
-      "fixed": false,
-      "category": "Architect",
-      "location": "phiGuard.js"
-    },
-    {
-      "id": "ARCH-10",
-      "severity": "LOW",
-      "description": "범용 매직바이트 상수가 DICOM 상수 파일에 위치",
-      "fixed": false,
-      "category": "Architect",
-      "location": "constants.js"
+      "description": "DICOM_PREAMBLE_SIZE 지역 상수를 DICOM_MIN_FILE_SIZE로 aliasing하는 것보다 직접 DICOM_MIN_FILE_SIZE를 사용하는 것이 간결함.",
+      "location": "viewer/src/data/dicomParser/pixelDataParser.js:findPixelDataTag 내 DICOM_PREAMBLE_SIZE",
+      "fixed": false
     },
     {
       "id": "SEC-1",
       "severity": "MEDIUM",
-      "description": "dumpPhiValues 함수 모듈 레벨 직접 접근 가능 (PHI 평문 일괄 반환)",
-      "fixed": false,
-      "category": "Security",
-      "location": "phiGuard.js"
-    },
-    {
-      "id": "SEC-2",
-      "severity": "LOW",
-      "description": "getPhiValue 필드명 화이트리스트 확장 시 취약 가능성",
-      "fixed": false,
-      "category": "Security",
-      "location": "phiGuard.js"
-    },
-    {
-      "id": "SEC-3",
-      "severity": "MEDIUM",
-      "description": "readTag 예외 원시 메시지에 내부 구조(오프셋, 태그 hex) 노출 가능",
-      "fixed": false,
-      "category": "Security",
-      "location": "metadataParser.js Step 4"
-    },
-    {
-      "id": "SEC-4",
-      "severity": "LOW",
-      "description": "PHI 원본 값 WeakMap 메모리 잔존 (GC까지 평문 유지)",
-      "fixed": false,
-      "category": "Security",
-      "location": "phiGuard.js"
-    },
-    {
-      "id": "PERF-1",
-      "severity": "MEDIUM",
-      "description": "makeTagKey() 루프 내 반복 문자열 할당 (최대 20000회)",
-      "fixed": false,
-      "category": "Performance",
-      "location": "metadataParser.js while 루프"
-    },
-    {
-      "id": "PERF-2",
-      "severity": "LOW",
-      "description": "METADATA_TAGS 사전 조회 시 매 반복 makeTagKey 문자열 생성",
-      "fixed": false,
-      "category": "Performance",
-      "location": "metadataParser.js"
-    },
-    {
-      "id": "PERF-3",
-      "severity": "LOW",
-      "description": "Object.entries(METADATA_TAGS) 매 호출 시 새 배열 생성",
-      "fixed": false,
-      "category": "Performance",
-      "location": "metadataParser.js Step 5"
-    },
-    {
-      "id": "PERF-4",
-      "severity": "MEDIUM",
-      "description": "readString() 매 호출 시 new Uint8Array 뷰 생성",
-      "fixed": false,
-      "category": "Performance",
-      "location": "ParseContext.js"
-    },
-    {
-      "id": "PERF-7",
-      "severity": "MEDIUM",
-      "description": "skipUndefinedLengthSequence 재귀 호출 (최대 16단계)",
-      "fixed": false,
-      "category": "Performance",
-      "location": "tagReader.js"
-    },
-    {
-      "id": "PERF-8",
-      "severity": "MEDIUM",
-      "description": "parseMetadata + parseMetaGroup 간 DataView 중복 생성",
-      "fixed": false,
-      "category": "Performance",
-      "location": "metadataParser.js"
-    },
-    {
-      "id": "PERF-10",
-      "severity": "MEDIUM",
-      "description": "ParseContext.errors 배열 무제한 증가 가능",
-      "fixed": false,
-      "category": "Performance",
-      "location": "ParseContext.js"
+      "description": "view 파라미터가 null/undefined인 경우 명시적 검증이 없음. bufferLength > 132이면 for 루프 진입 후 view.getUint16()에서 TypeError 발생. try-catch가 RangeError는 잡지만 TypeError도 잡히므로 크래시는 않으나, 명시적 가드가 없어 의도치 않은 예외 경로로 진입 가능.",
+      "location": "viewer/src/data/dicomParser/pixelDataParser.js:findPixelDataTag 진입부",
+      "fixed": false
     },
     {
       "id": "CQ-1",
-      "severity": "MEDIUM",
-      "description": "PIXEL_DATA_GROUP 상수 중복 정의 (PIXEL_DATA_TAG.group과 동일)",
-      "fixed": true,
-      "category": "CodeQuality",
-      "location": "metadataParser.js"
-    },
-    {
-      "id": "CQ-4",
       "severity": "HIGH",
-      "description": "|| 연산자로 falsy 값(0) 의도치 않은 덮어쓰기 (bitsAllocated, pixelRepresentation 등)",
-      "fixed": true,
-      "category": "CodeQuality",
-      "location": "metadataParser.js Step 7"
+      "description": "UT-012 테스트에서 135바이트 ArrayBuffer의 offset 134에 setUint16을 호출하여 RangeError 발생. 이는 테스트 코드 자체의 버그로, 테스트하려는 findPixelDataTag의 동작이 아닌 테스트 픽스처 설정 단계에서 실패함. 수정 필요.",
+      "location": "viewer/tests/unit/dicomParser/pixelDataParser.test.js:UT-012",
+      "fixed": true
     },
     {
-      "id": "CQ-12",
-      "severity": "MEDIUM",
-      "description": "ctx.errors(태그 읽기 예외)가 반환 errors에 누락됨",
-      "fixed": true,
-      "category": "CodeQuality",
-      "location": "metadataParser.js Step 9"
+      "id": "CQ-2",
+      "severity": "HIGH",
+      "description": "pixelDataParser.test.js의 import 경로가 잘못됨. ../../fixtures/ -> ../fixtures/ 로 수정 필요. 테스트 픽스처 파일이 viewer/tests/unit/fixtures/에 위치하므로 dicomParser/ 하위 디렉토리에서는 상위 한 단계만 이동해야 함.",
+      "location": "viewer/tests/unit/dicomParser/pixelDataParser.test.js:16",
+      "fixed": true
     },
     {
       "id": "CQ-3",
       "severity": "HIGH",
-      "description": "필수 태그 누락 시 0값 전달로 다운스트림(렌더링)에서 0 나누기 위험",
-      "fixed": false,
-      "category": "CodeQuality",
-      "location": "metadataParser.js Step 7"
+      "description": "pixelDataParser.js에 이중 export 키워드 버그 존재. export // 주석 다음에 export function이 나와 syntax error 유발 가능. (이미 수정됨)",
+      "location": "viewer/src/data/dicomParser/pixelDataParser.js:findPixelDataTag export",
+      "fixed": true
     },
     {
-      "id": "CQ-5",
+      "id": "CQ-4",
       "severity": "MEDIUM",
-      "description": "pixelSpacing 빈 배열/1요소 배열 엣지 케이스 처리 보강 필요",
-      "fixed": true,
-      "category": "CodeQuality",
-      "location": "metadataParser.js"
-    },
-    {
-      "id": "CQ-6",
-      "severity": "MEDIUM",
-      "description": "범용 매직바이트 상수(MAGIC_TABLE)가 DICOM 파서 상수 파일에 위치",
-      "fixed": false,
-      "category": "CodeQuality",
-      "location": "constants.js"
-    },
-    {
-      "id": "CQ-7",
-      "severity": "MEDIUM",
-      "description": "DICOM Type 1 태그(studyInstanceUID, seriesInstanceUID)가 required:false",
-      "fixed": false,
-      "category": "CodeQuality",
-      "location": "constants.js METADATA_TAGS"
-    },
-    {
-      "id": "CQ-8",
-      "severity": "HIGH",
-      "description": "ParseContext.readString/readBytes 경계 검사 누락 (RangeError 가능)",
-      "fixed": false,
-      "category": "CodeQuality",
-      "location": "ParseContext.js"
-    },
-    {
-      "id": "CQ-9",
-      "severity": "MEDIUM",
-      "description": "preParsedMeta.metaEndOffset undefined 미검사",
-      "fixed": false,
-      "category": "CodeQuality",
-      "location": "metadataParser.js Step 2"
-    },
-    {
-      "id": "CQ-10",
-      "severity": "LOW",
-      "description": "ERROR_MESSAGES에 PARSE_WARN_OPTIONAL_TAG_MISSING 키 누락",
-      "fixed": true,
-      "category": "CodeQuality",
-      "location": "constants.js"
-    },
-    {
-      "id": "CQ-11",
-      "severity": "MEDIUM",
-      "description": "createDICOMMetadata 기본값과 METADATA_TAGS 기본값 불일치 (windowCenter: 0 vs 40)",
-      "fixed": false,
-      "category": "CodeQuality",
-      "location": "DICOMMetadata.js vs constants.js"
+      "description": "JSDoc 주석에 module-private: export되지 않는 내부 함수라고 기재되어 있으나 실제로는 export됨. 주석과 코드 불일치.",
+      "location": "viewer/src/data/dicomParser/pixelDataParser.js:findPixelDataTag JSDoc",
+      "fixed": true
     }
-  ]
+  ],
+  "review_summary": {
+    "architect": {
+      "total": 2,
+      "critical": 0,
+      "high": 0,
+      "fixed": 0
+    },
+    "security": {
+      "total": 1,
+      "critical": 0,
+      "high": 0,
+      "fixed": 0
+    },
+    "performance": {
+      "total": 0,
+      "critical": 0,
+      "high": 0,
+      "fixed": 0
+    },
+    "code_quality": {
+      "total": 4,
+      "critical": 0,
+      "high": 3,
+      "fixed": 4
+    },
+    "test_result": {
+      "total": 269,
+      "passed": 269,
+      "failed": 0,
+      "all_passed": true
+    }
+  }
 }
