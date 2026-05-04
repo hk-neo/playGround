@@ -1,162 +1,122 @@
-# 기능 명세서: findPixelDataTag() - DICOM 픽셀 데이터 태그 폴백 탐색
+# 기능 명세서: phiGuard.js - PHI 마스킹 보안 가드 모듈
 
-**Feature Branch**: `PLAYG-1830-find-pixel-data-tag`
-**Status**: Draft | **Date**: 2026-04-30
-**Ticket**: `PLAYG-1830` | **Type**: Detailed Design (SDS-3.11)
-**Input**: Jira 티켓 PLAYG-1830 상세 설계 요청
+**Feature Branch**: `feature/PLAYG-1831-phi-guard`
+**Status**: Draft | **Date**: 2026-05-04
+**Ticket**: `PLAYG-1831` | **Type**: Detailed Design (SDS-3.12)
+**Module ID**: SDS-3.12 | **File**: `viewer/src/data/dicomParser/phiGuard.js`
+**Security Class**: IEC 62304 Class A | **Traceability**: SAD COMP-3, FR-4.1, FR-4.5, HAZ-3.1, SEC-3
 
 ---
 
 ## User Scenarios & Testing
 
-### User Story 1 - 픽셀 데이터 태그 선형 탐색 (Priority: P1) :dart: MVP
-- **설명**: DICOM 파일의 정상 파싱 경로에서 픽셀 데이터 오프셋을 획득하지 못한 경우, 버퍼 전체를 선형 탐색하여 픽셀 데이터 태그(7FE0,0010)의 시작 위치를 찾는다. metadataParser에서 _pixelDataOffset 캐시가 없을 때 최후 수단으로 호출된다.
-- **Why this priority**: 픽셀 데이터 태그 탐색은 DICOM 렌더링의 전제 조건이며, 폴백 함수의 정확한 동작이 전체 파싱 파이프라인의 안정성을 보장한다.
-- **Independent Test**: 픽셀 데이터 태그가 특정 오프셋에 위치한 DICOM 버퍼를 생성하여 findPixelDataTag() 호출 후 반환값이 해당 오프셋과 일치하는지 검증한다.
-- **Acceptance Scenarios**:
-  1. **Given** 픽셀 데이터 태그(7FE0,0010)가 오프셋 1024에 위치한 유효한 DICOM 버퍼이면, **When** findPixelDataTag(view, bufferLength)를 호출하면, **Then** 1024를 반환한다.
-  2. **Given** 프리앰블(128바이트) + 매직바이트(4바이트) 직후에 픽셀 데이터 태그가 위치한 버퍼이면, **When** findPixelDataTag(view, bufferLength)를 호출하면, **Then** 오프셋 132를 반환한다.
-  3. **Given** 픽셀 데이터 태그가 버퍼 끝 근처에 위치한 경우, **When** findPixelDataTag(view, bufferLength)를 호출하면, **Then** 정확한 오프셋을 반환한다.
+### US-1: PHI 필드 자동 마스킹 (Priority: P1) :dart: MVP
 
-### User Story 2 - 태그 미발견 시 안전한 실패 처리 (Priority: P1) :dart: MVP
-- **설명**: 버퍼 전체를 탐색했음에도 픽셀 데이터 태그를 발견하지 못한 경우 -1을 반환하여 호출자(parsePixelData)가 ParseError를 발생시킬 수 있도록 한다. 예외를 직접 throw하지 않고 센티넬 값으로 실패를 알린다.
-- **Why this priority**: 폴백 함수의 안전한 실패는 상위 호출자의 에러 처리 흐름과 직결되므로 필수적이다.
-- **Independent Test**: 픽셀 데이터 태그가 포함되지 않은 버퍼를 입력하여 -1이 반환되는지 확인한다.
+- **설명**: DICOM 메타데이터 객체에서 환자 식별 정보(patientName, patientID, patientBirthDate)를 자동 감지하여 마스킹 문자열 `[REDACTED]`로 치환한다. metadataParser.js의 Step 8에서 파싱 완료 직후 호출되어 외부로 노출되는 메타데이터에 평문 PHI가 포함되지 않도록 보장한다.
+- **우선순위 사유**: PHI 마스킹은 HIPAA 및 국내 개인정보보호법 준수의 핵심 요구사항이며, PHI 노출은 즉각적인 법적 리스크를 유발한다.
+- **독립 테스트**: 환자 정보가 포함된 DICOM 메타데이터 객체를 `maskPhiFields()`에 전달 후, patientName/patientID/patientBirthDate 필드가 `[REDACTED]`로 치환되었는지 직접 검증.
 - **Acceptance Scenarios**:
-  1. **Given** 픽셀 데이터 태그(7FE0,0010)가 포함되지 않은 DICOM 버퍼이면, **When** findPixelDataTag(view, bufferLength)를 호출하면, **Then** -1을 반환한다.
-  2. **Given** 반환값이 -1이면, **When** 호출자(parsePixelData)가 이를 수신하면, **Then** ParseError를 발생시킨다.
+  1. **Given** patientName='홍길동', patientID='P001', patientBirthDate='19900101'이 포함된 metadata 객체가 주어지면, **When** `maskPhiFields(metadata)`를 호출하면, **Then** 세 필드 모두 `[REDACTED]`로 치환된다. (TC-12.1, TC-12.2)
+  2. **Given** metadata가 null이면, **When** `maskPhiFields(null)`을 호출하면, **Then** 예외 없이 null이 그대로 반환된다. (TC-12.6)
+  3. **Given** metadata가 undefined이면, **When** `maskPhiFields(undefined)`을 호출하면, **Then** undefined가 그대로 반환된다. (TC-12.6)
+  4. **Given** patientName 값이 빈 문자열('')이면, **When** `maskPhiFields(metadata)`를 호출하면, **Then** 해당 필드는 마스킹되지 않고 빈 문자열로 유지된다. (TC-12.5)
+  5. **Given** metadata가 문자열/숫자 등 객체가 아니면, **When** `maskPhiFields(42)`를 호출하면, **Then** 입력값이 그대로 반환된다. (TC-12.6)
 
-### User Story 3 - 버퍼 경계 초과 읽기 방지 (Priority: P1) :dart: MVP
-- **설명**: DataView 읽기 시 버퍼 경계를 초과하여 읽는 것을 방지한다. for 루프의 상한 조건(offset + 4 <= bufferLength)과 try-catch 예외 처리를 이중으로 적용하여 ArrayBuffer 범위 초과 읽기를 완전히 차단한다.
-- **Why this priority**: 메모리 안전성은 의료 소프트웨어의 필수 요구사항이며, IEC 62304 기준에 따라 버퍼 오버런은 심각한 위험(HAZ-5.3)으로 분류된다.
-- **Independent Test**: 최소 크기 버퍼와 경계 조건 버퍼를 입력하여 out-of-bounds 읽기가 발생하지 않고 안전하게 종료되는지 확인한다.
+### US-2: 마스킹된 원본 PHI 값 안전 조회 (Priority: P1) :dart: MVP
+
+- **설명**: 마스킹 처리된 메타데이터 객체에서 권한 있는 모듈이 원본 PHI 값을 안전하게 조회할 수 있다. PHI_FIELDS에 등록된 필드만 조회 가능하며, 비인가 필드 접근은 차단된다.
+- **우선순위 사유**: UI에서 환자 정보 표시가 필요한 특정 컴포넌트만 원본 값에 접근할 수 있어야 하며, 임의 필드 조회를 통한 정보 유출을 방지해야 한다.
+- **독립 테스트**: 마스킹된 metadata 객체에서 `getPhiValue()`로 원본 값을 조회하고, 비 PHI 필드 조회 시 undefined가 반환되는지 검증.
 - **Acceptance Scenarios**:
-  1. **Given** bufferLength가 136(최소 크기 + 4)인 버퍼이면, **When** findPixelDataTag(view, 136)를 호출하면, **Then** 루프가 오프셋 132에서 1회만 실행 후 안전하게 종료된다.
-  2. **Given** DataView가 읽기 중 예외를 발생시키는 손상된 버퍼이면, **When** findPixelDataTag(view, bufferLength)를 호출하면, **Then** try-catch가 예외를 포착하고 -1을 반환한다.
-  3. **Given** offset + 4 > bufferLength인 경계 상황이면, **When** 루프 조건을 평가하면, **Then** 루프가 실행되지 않고 -1을 반환한다.
+  1. **Given** `maskPhiFields()`로 마스킹된 metadata 객체가 주어지면, **When** `getPhiValue(metadata, 'patientName')`을 호출하면, **Then** 원본 값 '홍길동'이 반환된다. (TC-12.3)
+  2. **Given** 동일한 metadata 객체에서, **When** `getPhiValue(metadata, 'rows')`를 호출하면, **Then** undefined가 반환된다 (비 PHI 필드 차단, SEC-3). (TC-12.4)
+  3. **Given** 마스킹되지 않은 metadata 객체이면, **When** `getPhiValue(metadata, 'patientName')`을 호출하면, **Then** undefined가 반환된다 (마스킹 이력 없음).
 
-### User Story 4 - Little Endian 바이트 오더 매칭 (Priority: P1) :dart: MVP
-- **설명**: DataView.getUint16()을 사용하여 Little Endian 바이트 오더로 DICOM 태그의 group과 element를 읽고, 사전 정의된 상수(0x7FE0, 0x0010)와 비교하여 픽셀 데이터 태그를 식별한다.
-- **Why this priority**: 대부분의 DICOM 파일이 Little Endian을 사용하므로 기본 지원이 필수적이다.
-- **Independent Test**: Big Endian으로 저장된 태그와 Little Endian으로 저장된 태그가 포함된 버퍼에서 Little Endian 태그만 매칭되는지 확인한다.
+### US-3: PHI 원본 값 일괄 덤프 (Priority: P2)
+
+- **설명**: 디버깅 및 내부 검증 목적으로 마스킹된 메타데이터의 모든 원본 PHI 값을 일괄 조회한다. `@internal` 태그가 부여되어 배럴 파일(index.js)에서 export되지 않으므로 프로덕션 UI에서는 직접 호출할 수 없다.
+- **우선순위 사유**: 개발/테스트 단계에서 PHI 마스킹 동작 검증에 필수적이지만, 프로덕션에서는 노출되지 않아야 하므로 접근 제어가 중요하다.
+- **독립 테스트**: `maskPhiFields()` 처리 후 `dumpPhiValues()`를 호출하여 원본 값이 모두 포함된 객체가 반환되는지 확인.
 - **Acceptance Scenarios**:
-  1. **Given** 픽셀 데이터 태그가 Little Endian으로 저장된 DICOM 버퍼이면, **When** findPixelDataTag(view, bufferLength)를 호출하면, **Then** 올바른 오프셋을 반환한다.
-  2. **Given** 픽셀 데이터 태그가 Big Endian으로 저장된 DICOM 버퍼이면, **When** findPixelDataTag(view, bufferLength)를 호출하면, **Then** 태그를 발견하지 못하고 -1을 반환한다. (TODO-BE: Big Endian 지원 필요)
+  1. **Given** `maskPhiFields()`로 마스킹된 metadata 객체가 주어지면, **When** `dumpPhiValues(metadata)`를 호출하면, **Then** `{ patientName: '홍길동', patientID: 'P001', patientBirthDate: '19900101' }` 객체가 반환된다.
+  2. **Given** 마스킹 이력이 없는 metadata 객체이면, **When** `dumpPhiValues(metadata)`를 호출하면, **Then** 빈 객체 `{}`가 반환된다.
 
-### User Story 5 - 2바이트 간격 최적화 탐색 (Priority: P2)
-- **설명**: DICOM 태그는 항상 짝수 오프셋에 정렬되므로, 2바이트 간격으로 탐색하여 불필요한 반복을 줄인다. 오프셋을 +2씩 증가시켜 시간복잡도를 O(n/2)로 유지한다.
-- **Why this priority**: 성능 최적화 항목으로 기능적 정확성에는 영향이 없으나 대용량 파일에서 유의미한 개선을 제공한다.
-- **Independent Test**: 동일한 버퍼에 대해 1바이트 간격 탐색과 2바이트 간격 탐색의 결과가 동일한지 확인한다.
+### US-4: 메모리 안전성 및 GC 연동 (Priority: P1) :dart: MVP
+
+- **설명**: WeakMap 기반 phiStore를 사용하여 metadata 객체가 가비지 컬렉션될 때 원본 PHI 값도 자동으로 해제된다. 일반 Map 사용 시 발생할 수 있는 강한 참조로 인한 메모리 누수를 원천 방지한다.
+- **우선순위 사유**: DICOM 뷰어는 대용량 파일을 반복적으로 처리하므로, PHI 원본 값의 누적은 메모리 부족을 유발할 수 있다.
+- **독립 테스트**: 대량의 metadata 객체를 생성/마스킹 후 참조를 해제하고 GC 수행 시 메모리가 회수되는지 간접적으로 확인.
 - **Acceptance Scenarios**:
-  1. **Given** DICOM 태그가 항상 짝수 오프셋에 위치한다는 규칙 하에서, **When** findPixelDataTag()가 2바이트 간격으로 탐색하면, **Then** 1바이트 간격 탐색과 동일한 결과를 반환한다.
-
-### Edge Cases (엣지 케이스)
-- **EC-001**: bufferLength가 132 이하인 경우 - 루프가 실행되지 않고 즉시 -1 반환
-- **EC-002**: bufferLength가 정확히 136인 경우 - 오프셋 132에서 1회만 읽기 시도
-- **EC-003**: 픽셀 데이터 태그가 버퍼 마지막 4바이트에 위치한 경우 - 정확한 오프셋 반환
-- **EC-004**: 동일한 group(0x7FE0)에 다른 element가 있는 경우 - element 비교에서 불일치하여 스킵
-- **EC-005**: 버퍼에 0x7FE0 패턴이 우연히 등장하지만 element가 0x0010이 아닌 경우 - 오프셋 반환하지 않음
-- **EC-006**: view가 null 또는 undefined인 경우 - [NEEDS CLARIFICATION] 함수 진입 시 명시적 검증 여부 (현재 설계에는 명시되지 않음)
-- **EC-007**: 매우 큰 버퍼(수십 MB 이상) - O(n/2) 선형 탐색으로 인한 성능 저하 가능 (폴백 경로에서만 실행되므로 실제 영향 제한적)
+  1. **Given** `maskPhiFields()`로 마스킹된 metadata 객체의 참조가 해제되면, **When** GC가 수행되면, **Then** phiStore에서 해당 엔트리도 자동 삭제된다.
 
 ---
 
 ## Requirements
 
-### Functional Requirements (기능 요구사항)
-- **FR-1.4**: 시스템은 DICOM 파일에서 픽셀 데이터 태그(7FE0,0010)를 탐색하고 바이너리 복셀 데이터를 추출해야 함
-- **FR-1.5**: 시스템은 픽셀 데이터 오프셋과 길이를 메타데이터 기반으로 검증하고, 불일치 시 경고를 발생해야 함
-- **FR-2.4**: 시스템은 추출된 복셀 데이터를 ArrayBuffer 형태로 상위 모듈(parseDICOM)에 제공해야 함
-- **FR-4.5**: 시스템은 버퍼 null, 파일 크기 초과, 태그 미발견, 오프셋 범위 초과 시 구조화된 에러(ParseError)를 throw해야 함
-- **FR-5.1**: 시스템은 예상/실제 픽셀 데이터 길이 불일치 시 경고(warning)를 반환 객체에 포함해야 함
-- **FR-5.2**: 시스템은 길이 불일치 경고에 code, message, severity 필드를 포함한 구조화된 객체를 사용해야 함
+### 기능 요구사항 (Functional Requirements)
 
-- **FR-001**: 시스템은 DataView와 bufferLength를 입력받아 픽셀 데이터 태그의 시작 오프셋을 반환하는 findPixelDataTag(view, bufferLength) 함수를 제공해야 한다. 함수 시그니처: findPixelDataTag(view: DataView, bufferLength: number): number (추적: FR-1.4)
+| ID | 요구사항 | 관련 US | 상태 |
+| --- | --- | --- | --- |
+| FR-4.1 | DICOM 메타데이터의 PHI 필드(patientName, patientID, patientBirthDate)를 파싱 완료 직후 `[REDACTED]`로 마스킹해야 한다. 원본 값은 모듈 내부 phiStore에 안전하게 보관되어야 한다. | US-1 | 정의 완료 |
+| FR-4.5 | 마스킹된 메타데이터에서 원본 PHI 값을 조회할 때 PHI_FIELDS에 등록된 필드만 조회 가능해야 하며, 비인가 필드 접근은 undefined를 반환해야 한다. | US-2 | 정의 완료 |
 
-- **FR-002**: 시스템은 탐색 대상 태그를 상수로 정의해야 한다. targetGroup = 0x7FE0, targetElement = 0x0010. 이 값은 constants.js의 PIXEL_DATA_TAG와 일치해야 한다. (추적: FR-1.4)
+### 비기능 요구사항 (Non-Functional Requirements)
 
-- **FR-003**: 시스템은 탐색 시작 오프셋을 132로 설정해야 한다. 이는 DICOM 프리앰블(128바이트) + 매직바이트 'DICM'(4바이트) 이후의 첫 번째 태그 위치이다. (추적: FR-1.1)
+| ID | 요구사항 | 관련 US | 상태 |
+| --- | --- | --- | --- |
+| NFR-4 | 견고성(Robustness): null, undefined, 객체가 아닌 타입의 입력에 대해 예외를 발생시키지 않고 입력값을 그대로 반환해야 한다. | US-1 | 정의 완료 |
+| SEC-3 | 보안: PHI_FIELDS 외 필드명으로 getPhiValue()를 호출하면 항상 undefined를 반환하여 비인가 필드 접근을 차단해야 한다. | US-2 | 정의 완료 |
 
-- **FR-004**: 시스템은 for 루프로 오프셋 132부터 (bufferLength - 4)까지 2바이트 간격(+2)으로 순차 탐색해야 한다. 루프 조건: offset + 4 <= bufferLength. (추적: NFR-1)
+### 안전 요구사항 (Safety Requirements)
 
-- **FR-005**: 시스템은 각 오프셋에서 DataView.getUint16(offset, true)로 group을 읽고, DataView.getUint16(offset + 2, true)로 element를 읽어야 한다. Little Endian(littleEndian=true)을 사용한다. (추적: FR-2.2)
+| ID | 요구사항 | 관련 US | 상태 |
+| --- | --- | --- | --- |
+| HAZ-3.1 | 정보 유출 방지: 파싱 완료 후 반환 전 마스킹을 보장하여, 외부로 노출되는 metadata 객체의 PHI는 항상 `[REDACTED]`이어야 한다. | US-1, US-4 | 정의 완료 |
 
-- **FR-006**: 시스템은 group === 0x7FE0 && element === 0x0010 조건이 일치하면 해당 offset을 즉시 반환해야 한다. (추적: FR-1.4)
+### 기술 제약사항
 
-- **FR-007**: 시스템은 DataView 읽기 중 예외 발생 시 try-catch로 포착하여 루프를 탈출하고 -1을 반환해야 한다. 예외가 호출자로 전파되지 않아야 한다. (추적: HAZ-5.3)
-
-- **FR-008**: 시스템은 루프가 정상 종료된 후(모든 오프셋 탐색 완료) -1을 반환해야 한다. 이는 픽셀 데이터 태그가 버퍼에 존재하지 않음을 의미한다. (추적: FR-1.4)
-
-- **FR-009**: 시스템은 bufferLength가 132 이하인 경우 루프를 실행하지 않고 즉시 -1을 반환해야 한다. (추적: HAZ-5.3)
-
-### Non-Functional Requirements (비기능 요구사항)
-
-- **NFR-001 (안전성)**: 모든 DataView 읽기는 try-catch 블록으로 보호되어야 하며, 예외 발생 시 함수가 안전하게 종료되어야 한다. 루프 상한 조건(offset + 4 <= bufferLength)으로 out-of-bounds 읽기를 1차 방어하고, try-catch로 2차 방어한다. (추적: HAZ-5.3)
-
-- **NFR-002 (성능)**: DICOM 태그의 짝수 정렬 특성을 활용하여 2바이트 간격으로 탐색함으로써 시간복잡도를 O(n/2)로 유지해야 한다. 정상 경로에서는 metadataParser가 _pixelDataOffset을 캐시하므로 본 함수는 폴백 경로에서만 실행된다. (추적: NFR-1)
-
-- **NFR-003 (안전 등급)**: IEC 62304 Class A에 해당하는 비진단 경로의 폴백 함수이다. 진단 결과에 직접적 영향을 미치지 않는다.
-
-- **NFR-004 (확장성)**: 현재 Little Endian(true)만 검사한다. Big Endian DICOM 파일 지원 시 양방향 검사 로직 추가가 필요하다. (TODO-BE)
-
-### Key Entities (핵심 데이터 모델)
-- **voxelData**: ArrayBuffer - 추출된 복셀 바이너리 데이터. 상위 모듈에서 TypedArray로 변환하여 렌더링에 사용
-- **warnings**: Array<{code: string, message: string, severity: string}> - 길이 불일치 등 비치명적 문제 경고 목록
-- **pixelDataOffset**: number - 버퍼 내 픽셀 데이터 시작 위치(바이트). 명시적 전달 또는 findPixelDataTag()로 탐색
-- **pixelDataLength**: number - 픽셀 데이터 길이(바이트). 명시적 전달 또는 buffer剩余 길이로 계산
-
-- **findPixelDataTag**: module-private 폴백 함수. 입력: DataView, bufferLength. 출력: 태그 오프셋(number) 또는 -1. 프리앰블 이후부터 2바이트 간격으로 선형 탐색하여 픽셀 데이터 태그(7FE0,0010)의 위치를 찾는다. export되지 않는 비공개 함수이다.
-- **PIXEL_DATA_TAG (constants.js)**: 대상 태그 식별자 상수. group: 0x7FE0, element: 0x0010. findPixelDataTag()의 탐색 대상이다.
-- **parsePixelData()**: findPixelDataTag()의 유일한 호출자. pixelDataOffset 누락 시 폴백으로 호출하며, -1 반환 시 ParseError를 발생시킨다.
-
-### 연관 모듈 의존성
-
-| 모듈 | 함수/상수 | 역할 | 연관 SDS |
-|------|-----------|------|----------|
-| DataView (Web API) | getUint16() | 바이트 단위 읽기 (Little Endian) | - |
-| pixelDataParser | parsePixelData() | 픽셀 데이터 파싱, 본 함수의 유일한 호출자 | SDS-3.11 |
-| constants | PIXEL_DATA_TAG | 대상 태그 식별자 정의 (0x7FE0, 0x0010) | - |
-| CBVError | ParseError | 태그 미발견 시 호출자가 발생시키는 에러 클래스 | - |
-
-### 사전조건 및 사후조건
-
-**사전조건 (Pre-conditions):**
-- view는 유효한 DataView 객체여야 한다
-- bufferLength > 132 (DICOM 최소 파일 크기: 프리앰블 128 + 매직바이트 4)
-
-**사후조건 (Post-conditions):**
-- 반환값 >= 0: 픽셀 데이터 태그(7FE0,0010)의 시작 오프셋
-- 반환값 === -1: 태그 미발견 (호출자가 ParseError 발생)
-
-### 위험 분석
-
-| 위험 ID | 위험 내용 | 심각도 | 완화 조치 |
-|---------|-----------|--------|-----------|
-| HAZ-5.3 | ArrayBuffer 범위 초과 읽기 | 중 | 루프 상한 조건(offset + 4 <= bufferLength) 및 try-catch 이중 방어 |
-| HAZ-1.1 | 픽셀 데이터 누락으로 인한 렌더링 실패 | 중 | -1 반환 후 호출자가 ParseError 발생 |
+| 제약 ID | 제약 내용 | 근거 |
+| --- | --- | --- |
+| TC-1 | PHI_FIELDS는 const 상수로 선언하여 런타임 수정 불가 | HIPAA Safe Harbor 최소 식별 정보 3종 보장 |
+| TC-2 | phiStore는 WeakMap으로 모듈 스코프에 캡슐화 (export 불가) | 외부에서 원본 PHI 직접 접근 차단 |
+| TC-3 | PHI_MASK 마스킹 문자열은 별도 상수로 관리 | 향후 마스킹 정책 변경 시 단일 지점 수정 |
+| TC-4 | dumpPhiValues는 @internal로 프로덕션 미노출 | 프로덕션 환경에서 PHI 일괄 노출 방지 |
+| TC-5 | IEC 62304 Class A 안전 등급 준수 | 의료기기 소프트웨어 규제 요구사항 |
 
 ---
 
 ## Success Criteria
 
-### Measurable Outcomes (측정 가능한 지표)
+### SC-1: PHI 마스킹 동작 검증
 
-- **SC-001**: 픽셀 데이터 태그(7FE0,0010)가 포함된 DICOM 버퍼에서 정확한 태그 시작 오프셋이 반환된다.
-- **SC-002**: 픽셀 데이터 태그가 포함되지 않은 DICOM 버퍼에서 -1이 반환된다.
-- **SC-003**: bufferLength가 132 이하인 버퍼에서 루프가 실행되지 않고 즉시 -1이 반환된다.
-- **SC-004**: DataView 읽기 예외 발생 시 try-catch가 포착하여 -1이 반환되고, 예외가 호출자로 전파되지 않는다.
-- **SC-005**: 버퍼 경계 조건(offset + 4 > bufferLength)에서 out-of-bounds 읽기가 발생하지 않는다.
-- **SC-006**: 정상 파싱 경로에서는 본 함수가 호출되지 않으며, 오직 폴백 경로에서만 실행된다.
-- **SC-007**: 2바이트 간격 탐색 결과가 1바이트 간격 탐색 결과와 정확히 일치한다 (DICOM 태그 짝수 정렬 보장).
+- maskPhiFields(metadata) 호출 후 patientName, patientID, patientBirthDate 필드 값이 `[REDACTED]`로 치환된다.
+- 원본 값은 phiStore(WeakMap)에 안전하게 보관된다.
+- 빈 문자열('') 및 undefined 값은 마스킹하지 않는다.
+- null/undefined 입력 시 예외 없이 동일 값을 반환한다.
 
-### Definition of Done
+### SC-2: 원본 값 안전 조회 검증
 
-- [ ] 모든 FR-001 ~ FR-009 요구사항 구현 완료
-- [ ] findPixelDataTag() 함수가 8단계 탐색 알고리즘을 정확히 수행
-- [ ] 단위 테스트 커버리지 90% 이상 (findPixelDataTag 함수)
-- [ ] Edge Case 시나리오(EC-001 ~ EC-007) 검증 완료
-- [ ] DataView 예외 발생 시 안전한 종료 확인
-- [ ] 버퍼 경계 초과 읽기 방지 확인
-- [ ] 태그 미발견 시 -1 반환 및 호출자 ParseError 발생 확인
-- [ ] 기존 parsePixelData() 통합 테스트 회귀 없음
-- [ ] 코드 리뷰 승인
+- getPhiValue(metadata, field)는 PHI_FIELDS에 등록된 필드만 조회 가능하다.
+- 비 PHI 필드 조회 시 undefined를 반환한다 (SEC-3).
+- 마스킹 이력이 없는 객체에서도 예외 없이 undefined를 반환한다.
+
+### SC-3: 단위 테스트 통과
+
+| TC ID | 테스트명 | 검증 내용 | 추적 |
+| --- | --- | --- | --- |
+| TC-12.1 | patientName 마스킹 | `meta.patientName === '[REDACTED]'` | FR-4.1 |
+| TC-12.2 | patientID 마스킹 | `meta.patientID === '[REDACTED]'` | FR-4.1 |
+| TC-12.3 | getPhiValue 원본 조회 | `getPhiValue(meta, 'patientName') === '홍길동'` | FR-4.5 |
+| TC-12.4 | 비 PHI 필드 조회 차단 | `getPhiValue(meta, 'rows') === undefined` | SEC-3 |
+| TC-12.5 | 빈 문자열 마스킹 생략 | 빈 값은 마스킹하지 않고 그대로 유지 | FR-4.1 |
+| TC-12.6 | null 객체 안전 처리 | `maskPhiFields(null)`이 에러 없이 null 반환 | NFR-4 |
+
+### SC-4: 추적성 매트릭스
+
+| 요구사항 ID | 설명 | 관련 User Story | 관련 테스트 |
+| --- | --- | --- | --- |
+| FR-4.1 | PHI 마스킹 | US-1 | TC-12.1, TC-12.2 |
+| FR-4.5 | PHI 접근 제어 | US-2 | TC-12.3, TC-12.4 |
+| HAZ-3.1 | 정보 유출 방지 | US-1, US-4 | TC-12.1 |
+| SEC-3 | 비인가 필드 접근 차단 | US-2 | TC-12.4 |
+| NFR-4 | 견고성 (null 안전) | US-1 | TC-12.6 |

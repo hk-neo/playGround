@@ -898,46 +898,216 @@ describe("readTagValue - 경계 조건", () => {
 });
 
 // ============================================================
-// PHI 가드 단위 테스트
+// PHI 가드 단위 테스트 (SDS-3.12) - TC-12.1 ~ TC-12.6
 // ============================================================
 
-import { maskPhiFields, getPhiValue } from "../src/data/dicomParser/phiGuard.js";
+import { maskPhiFields, getPhiValue, dumpPhiValues } from "../src/data/dicomParser/phiGuard.js";
 import { createDICOMMetadata } from "../src/types/DICOMMetadata.js";
 
-describe("PHI 가드", () => {
-  it("patientName을 [REDACTED]로 마스킹해야 한다", () => {
-    const meta = createDICOMMetadata({ patientName: "홍길동" });
-    maskPhiFields(meta);
-    expect(meta.patientName).toBe("[REDACTED]");
+describe("phiGuard - PHI 마스킹 보안 가드", () => {
+
+  // ----------------------------------------------------------
+  // TC-12.1 ~ TC-12.2: PHI 필드 마스킹 검증 (FR-4.1, HAZ-3.1)
+  // ----------------------------------------------------------
+  describe("maskPhiFields - PHI 필드 마스킹", () => {
+    it("TC-12.1: patientName을 [REDACTED]로 마스킹해야 한다", () => {
+      const meta = createDICOMMetadata({
+        patientName: "홍길동",
+        patientID: "P001",
+        patientBirthDate: "19900101",
+        rows: 512,
+      });
+      maskPhiFields(meta);
+      expect(meta.patientName).toBe("[REDACTED]");
+    });
+
+    it("TC-12.2: patientID, patientBirthDate를 [REDACTED]로 마스킹하고 비 PHI 필드는 변경하지 않아야 한다", () => {
+      const meta = createDICOMMetadata({
+        patientName: "홍길동",
+        patientID: "P001",
+        patientBirthDate: "19900101",
+        rows: 512,
+      });
+      maskPhiFields(meta);
+      expect(meta.patientID).toBe("[REDACTED]");
+      expect(meta.patientBirthDate).toBe("[REDACTED]");
+      // 비 PHI 필드는 변경되지 않아야 함
+      expect(meta.rows).toBe(512);
+    });
   });
 
-  it("patientID를 [REDACTED]로 마스킹해야 한다", () => {
-    const meta = createDICOMMetadata({ patientID: "P001" });
-    maskPhiFields(meta);
-    expect(meta.patientID).toBe("[REDACTED]");
+  // ----------------------------------------------------------
+  // TC-12.3 ~ TC-12.4: getPhiValue 화이트리스트 및 차단 (FR-4.5, SEC-3)
+  // ----------------------------------------------------------
+  describe("getPhiValue - 원본 PHI 값 안전 조회", () => {
+    it("TC-12.3: 마스킹된 객체에서 원본 PHI 값을 조회할 수 있어야 한다", () => {
+      const meta = createDICOMMetadata({
+        patientName: "홍길동",
+        patientID: "P001",
+        patientBirthDate: "19900101",
+        rows: 512,
+      });
+      maskPhiFields(meta);
+      expect(getPhiValue(meta, "patientName")).toBe("홍길동");
+      expect(getPhiValue(meta, "patientID")).toBe("P001");
+      expect(getPhiValue(meta, "patientBirthDate")).toBe("19900101");
+    });
+
+    it("TC-12.4: 비 PHI 필드 조회 시 undefined를 반환해야 한다 (SEC-3)", () => {
+      const meta = createDICOMMetadata({
+        patientName: "홍길동",
+        patientID: "P001",
+        patientBirthDate: "19900101",
+        rows: 512,
+      });
+      maskPhiFields(meta);
+      expect(getPhiValue(meta, "rows")).toBeUndefined();
+      expect(getPhiValue(meta, "columns")).toBeUndefined();
+      expect(getPhiValue(meta, "unknownField")).toBeUndefined();
+    });
+
+    it("TC-12.4a: 마스킹 이력 없는 객체에서 getPhiValue 호출 시 undefined를 반환해야 한다", () => {
+      const freshMeta = createDICOMMetadata({ patientName: "이몽룡" });
+      // maskPhiFields 호출하지 않음
+      expect(getPhiValue(freshMeta, "patientName")).toBeUndefined();
+    });
+
+    it("TC-12.4b: null/undefined metadata에 getPhiValue 호출 시 undefined를 반환해야 한다", () => {
+      expect(getPhiValue(null, "patientName")).toBeUndefined();
+      expect(getPhiValue(undefined, "patientName")).toBeUndefined();
+    });
   });
 
-  it("getPhiValue로 원본 값을 조회할 수 있어야 한다", () => {
-    const meta = createDICOMMetadata({ patientName: "홍길동", patientID: "P001" });
-    maskPhiFields(meta);
-    expect(getPhiValue(meta, "patientName")).toBe("홍길동");
-    expect(getPhiValue(meta, "patientID")).toBe("P001");
+  // ----------------------------------------------------------
+  // TC-12.5 ~ TC-12.6: 빈 문자열 및 null 안전성 (NFR-4)
+  // ----------------------------------------------------------
+  describe("maskPhiFields - 안전성 테스트", () => {
+    it("TC-12.5: 빈 문자열 PHI 필드는 마스킹하지 않고 그대로 유지해야 한다", () => {
+      const meta = createDICOMMetadata({
+        patientName: "",
+        patientID: "P002",
+        patientBirthDate: "19850505",
+      });
+      maskPhiFields(meta);
+      // 빈 문자열은 마스킹하지 않음
+      expect(meta.patientName).toBe("");
+      // 값이 있는 필드는 마스킹됨
+      expect(meta.patientID).toBe("[REDACTED]");
+      expect(meta.patientBirthDate).toBe("[REDACTED]");
+    });
+
+    it("TC-12.6: null 입력 시 예외 없이 null을 반환해야 한다 (NFR-4)", () => {
+      expect(maskPhiFields(null)).toBeNull();
+    });
+
+    it("TC-12.6a: undefined 입력 시 예외 없이 undefined를 반환해야 한다 (NFR-4)", () => {
+      expect(maskPhiFields(undefined)).toBeUndefined();
+    });
+
+    it("TC-12.6b: 비객체 입력(숫자) 시 입력값을 그대로 반환해야 한다 (NFR-4)", () => {
+      expect(maskPhiFields(42)).toBe(42);
+    });
+
+    it("TC-12.6c: 비객체 입력(문자열) 시 입력값을 그대로 반환해야 한다 (NFR-4)", () => {
+      expect(maskPhiFields("string")).toBe("string");
+    });
+
+    it("TC-12.6d: maskPhiFields 반환값이 입력과 동일 참조여야 한다", () => {
+      const meta = createDICOMMetadata({ patientName: "홍길동" });
+      const result = maskPhiFields(meta);
+      expect(result).toBe(meta); // 동일 참조 확인
+    });
   });
 
-  it("PHI가 아닌 필드는 getPhiValue가 undefined를 반환해야 한다", () => {
-    const meta = createDICOMMetadata({ patientName: "홍길동" });
-    maskPhiFields(meta);
-    expect(getPhiValue(meta, "rows")).toBeUndefined();
+  // ----------------------------------------------------------
+  // dumpPhiValues 테스트 (TC-4, US-3)
+  // ----------------------------------------------------------
+  describe("dumpPhiValues - 원본 PHI 일괄 덤프", () => {
+    it("마스킹된 객체에서 원본 PHI 3종을 일괄 반환해야 한다", () => {
+      const meta = createDICOMMetadata({
+        patientName: "홍길동",
+        patientID: "P001",
+        patientBirthDate: "19900101",
+      });
+      maskPhiFields(meta);
+      const dumped = dumpPhiValues(meta);
+      expect(dumped).toEqual({
+        patientName: "홍길동",
+        patientID: "P001",
+        patientBirthDate: "19900101",
+      });
+    });
+
+    it("마스킹 이력 없는 객체에서는 빈 객체를 반환해야 한다", () => {
+      const freshMeta = createDICOMMetadata({ patientName: "이몽룡" });
+      expect(dumpPhiValues(freshMeta)).toEqual({});
+    });
+
+    it("null 입력 시 빈 객체를 반환해야 한다", () => {
+      expect(dumpPhiValues(null)).toEqual({});
+    });
+
+    it("undefined 입력 시 빈 객체를 반환해야 한다", () => {
+      expect(dumpPhiValues(undefined)).toEqual({});
+    });
+
+    it("반환값이 phiStore 내부 데이터와 독립적이어야 한다 (얕은 복사)", () => {
+      const meta = createDICOMMetadata({
+        patientName: "홍길동",
+        patientID: "P001",
+        patientBirthDate: "19900101",
+      });
+      maskPhiFields(meta);
+      const dumped = dumpPhiValues(meta);
+      // 반환값 수정
+      dumped.patientName = "수정됨";
+      // getPhiValue 결과는 불변이어야 함
+      expect(getPhiValue(meta, "patientName")).toBe("홍길동");
+      // 다시 dump해도 원본 유지
+      const dumped2 = dumpPhiValues(meta);
+      expect(dumped2.patientName).toBe("홍길동");
+    });
   });
 
-  it("빈 문자열 PHI 필드는 마스킹하지 않아야 한다", () => {
-    const meta = createDICOMMetadata({ patientName: "", patientID: "" });
-    maskPhiFields(meta);
-    expect(meta.patientName).toBe("");
-    expect(meta.patientID).toBe("");
-  });
+  // ----------------------------------------------------------
+  // WeakMap GC 연동 및 메모리 안전성 (US-4, TC-2)
+  // ----------------------------------------------------------
+  describe("WeakMap GC 연동 및 독립성", () => {
+    it("동일 metadata 객체에 중복 maskPhiFields 호출 시 원본 값이 보존되어야 한다 (멱등성)", () => {
+      const meta = createDICOMMetadata({
+        patientName: "홍길동",
+        patientID: "P001",
+        patientBirthDate: "19900101",
+      });
+      maskPhiFields(meta);
+      // 이미 [REDACTED]로 마스킹된 상태에서 재호출
+      maskPhiFields(meta);
+      // 마스킹 상태 유지
+      expect(meta.patientName).toBe("[REDACTED]");
+      // 멱등성: 두 번째 호출에서도 원본 값 보존
+      expect(getPhiValue(meta, "patientName")).toBe("홍길동");
+      expect(getPhiValue(meta, "patientID")).toBe("P001");
+      expect(getPhiValue(meta, "patientBirthDate")).toBe("19900101");
+    });
 
-  it("null 객체를 전달하면 그대로 반환해야 한다", () => {
-    expect(maskPhiFields(null)).toBeNull();
+    it("서로 다른 metadata 객체는 독립적인 phiStore 엔트리를 가져야 한다", () => {
+      const meta1 = createDICOMMetadata({
+        patientName: "홍길동",
+        patientID: "P001",
+        patientBirthDate: "19900101",
+      });
+      const meta2 = createDICOMMetadata({
+        patientName: "이몽룡",
+        patientID: "P002",
+        patientBirthDate: "19850505",
+      });
+      maskPhiFields(meta1);
+      maskPhiFields(meta2);
+      // 각각 독립적인 원본 값 반환
+      expect(getPhiValue(meta1, "patientName")).toBe("홍길동");
+      expect(getPhiValue(meta2, "patientName")).toBe("이몽룡");
+      expect(getPhiValue(meta1, "patientID")).toBe("P001");
+      expect(getPhiValue(meta2, "patientID")).toBe("P002");
+    });
   });
 });

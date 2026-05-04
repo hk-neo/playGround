@@ -93,3 +93,23 @@ _리스트 파일 예시:_
 - `rmr_list.json` - Hazard 티켓 생성용
 - `sds_list.json` - SD 항목 생성용
 - `sad_list.json` - COMP 항목 생성용
+
+# 프로젝트 구조 맵핑
+# viewer/src/data/dicomParser/ — DICOM 파서 모듈
+#   phiGuard.js — PHI 마스킹 보안 가드 (SDS-3.12, PLAYG-1831)
+#   metadataParser.js — 메타데이터 파서 (SDS-3.9, PLAYG-1828)
+#   index.js — 배럴 export (parseDICOM, validateMagicByte, parseMetadata, maskPhiFields, getPhiValue 등)
+#   tagReader.js — 개별 태그 읽기 (VR별 파싱)
+#   ParseContext.js — 바이트 버퍼 읽기 컨텍스트
+#   constants.js — 상수 정의 (MAX_TAG_COUNT, ERROR_CODES, METADATA_TAGS 등)
+# viewer/src/types/ — 타입 팩토리
+#   DICOMMetadata.js — DICOM 메타데이터 객체 생성
+#   ParseResult.js — 파싱 결과 객체 생성
+# viewer/src/errors/ — 에러 클래스
+#   CBVError.js — 커스텀 에러 (ParseError 포함)
+# viewer/src/data/dicomDictionary.js — DICOM 태그 사전
+# viewer/tests/ — 테스트 파일
+#   unit.test.js — 통합 단위 테스트 (264개 TC 포함)
+# docs/spec-kit/ — 명세/계획/태스크 문서
+# docs/progress/ — 세션 컨텍스트
+# docs/artifacts/ — SRS, SDS, SAD, RMR 산출물

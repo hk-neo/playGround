@@ -6,83 +6,58 @@
     {
       "id": "ARCH-1",
       "severity": "MEDIUM",
-      "description": "findPixelDataTag()가 JSDoc에서 module-private로 설계되었으나 실제로는 export됨. 테스트 접근을 위해 export한 것은 이해되나, 프로덕션 코드에서 직접 import하는 것을 방지하는 네이밍 컨벤션 또는 별도 테스트 유틸 경로 분리 검토 필요.",
-      "location": "viewer/src/data/dicomParser/pixelDataParser.js:findPixelDataTag",
-      "fixed": false
+      "description": "maskPhiFields 중복 호출 시 원본 PHI 값이 [REDACTED]로 덮어씌워지는 멱등성 부족. phiStore.get(metadata) 기존 값을 보존하고 metadata[field] !== PHI_MASK 가드 추가로 수정.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
+      "fixed": true
     },
     {
       "id": "ARCH-2",
       "severity": "LOW",
-      "description": "DICOM_PREAMBLE_SIZE 지역 상수를 DICOM_MIN_FILE_SIZE로 aliasing하는 것보다 직접 DICOM_MIN_FILE_SIZE를 사용하는 것이 간결함.",
-      "location": "viewer/src/data/dicomParser/pixelDataParser.js:findPixelDataTag 내 DICOM_PREAMBLE_SIZE",
+      "description": "Object.keys(originals).length > 0 대신 hasNewOriginals 플래그 사용으로 불필요한 임시 배열 생성 제거 가능. 현재 3개 항목이므로 실질적 영향은 미미함.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
+      "fixed": true
+    },
+    {
+      "id": "ARCH-3",
+      "severity": "LOW",
+      "description": "getPhiValue의 PHI_FIELDS.includes(field)가 선형 검색(O(n)). PHI_FIELDS가 3개뿐이므로 Set 전환은 과최적화. 수용 가능.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
       "fixed": false
     },
     {
       "id": "SEC-1",
       "severity": "MEDIUM",
-      "description": "view 파라미터가 null/undefined인 경우 명시적 검증이 없음. bufferLength > 132이면 for 루프 진입 후 view.getUint16()에서 TypeError 발생. try-catch가 RangeError는 잡지만 TypeError도 잡히므로 크래시는 않으나, 명시적 가드가 없어 의도치 않은 예외 경로로 진입 가능.",
-      "location": "viewer/src/data/dicomParser/pixelDataParser.js:findPixelDataTag 진입부",
+      "description": "maskPhiFields가 입력 객체를 직접 변이(mutation). 의도적 설계이며 metadataParser.js Step 8에서만 호출되어 실제 위험은 낮음. clone 후 반환 대안 고려 가능하나 성능 트레이드오프.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
+      "fixed": false
+    },
+    {
+      "id": "SEC-2",
+      "severity": "LOW",
+      "description": "dumpPhiValues가 배럴(index.js)에서 미노출이지만 소스 경로 직접 import로 접근 가능. @internal 태그로 문서화되어 있으나 런타임 접근 제어는 없음. 디버깅 목적이므로 수용 가능.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
+      "fixed": false
+    },
+    {
+      "id": "PERF-1",
+      "severity": "LOW",
+      "description": "maskPhiFields에서 phiStore.get(metadata)를 두 번 호출 (존재 확인 + 값 조회). 변수에 캐싱으로 최적화 가능하나 3개 필드라 무의미함. 수정 시 hasNewOriginals 플래그 도입으로 일부 해결됨.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
       "fixed": false
     },
     {
       "id": "CQ-1",
-      "severity": "HIGH",
-      "description": "UT-012 테스트에서 135바이트 ArrayBuffer의 offset 134에 setUint16을 호출하여 RangeError 발생. 이는 테스트 코드 자체의 버그로, 테스트하려는 findPixelDataTag의 동작이 아닌 테스트 픽스처 설정 단계에서 실패함. 수정 필요.",
-      "location": "viewer/tests/unit/dicomParser/pixelDataParser.test.js:UT-012",
+      "severity": "MEDIUM",
+      "description": "maskPhiFields 멱등성 부족 - 중복 호출 시 원본 값 손실. ARCH-1과 동일 이슈. phiStore 기존 값 보존 + PHI_MASK 가드 추가로 수정 완료. 테스트도 멱등성 검증으로 업데이트.",
+      "file": "viewer/src/data/dicomParser/phiGuard.js",
       "fixed": true
     },
     {
       "id": "CQ-2",
-      "severity": "HIGH",
-      "description": "pixelDataParser.test.js의 import 경로가 잘못됨. ../../fixtures/ -> ../fixtures/ 로 수정 필요. 테스트 픽스처 파일이 viewer/tests/unit/fixtures/에 위치하므로 dicomParser/ 하위 디렉토리에서는 상위 한 단계만 이동해야 함.",
-      "location": "viewer/tests/unit/dicomParser/pixelDataParser.test.js:16",
-      "fixed": true
-    },
-    {
-      "id": "CQ-3",
-      "severity": "HIGH",
-      "description": "pixelDataParser.js에 이중 export 키워드 버그 존재. export // 주석 다음에 export function이 나와 syntax error 유발 가능. (이미 수정됨)",
-      "location": "viewer/src/data/dicomParser/pixelDataParser.js:findPixelDataTag export",
-      "fixed": true
-    },
-    {
-      "id": "CQ-4",
-      "severity": "MEDIUM",
-      "description": "JSDoc 주석에 module-private: export되지 않는 내부 함수라고 기재되어 있으나 실제로는 export됨. 주석과 코드 불일치.",
-      "location": "viewer/src/data/dicomParser/pixelDataParser.js:findPixelDataTag JSDoc",
-      "fixed": true
-    }
-  ],
-  "review_summary": {
-    "architect": {
-      "total": 2,
-      "critical": 0,
-      "high": 0,
-      "fixed": 0
-    },
-    "security": {
-      "total": 1,
-      "critical": 0,
-      "high": 0,
-      "fixed": 0
-    },
-    "performance": {
-      "total": 0,
-      "critical": 0,
-      "high": 0,
-      "fixed": 0
-    },
-    "code_quality": {
-      "total": 4,
-      "critical": 0,
-      "high": 3,
-      "fixed": 4
-    },
-    "test_result": {
-      "total": 269,
-      "passed": 269,
-      "failed": 0,
-      "all_passed": true
+      "severity": "LOW",
+      "description": "테스트에 하드코딩된 환자 정보('홍길동', 'P001', '19900101')가 여러 테스트케이스에 반복됨. 상수 추출 또는 팩토리 함수 분리 권장.",
+      "file": "viewer/tests/unit.test.js",
+      "fixed": false
     }
   }
 }
