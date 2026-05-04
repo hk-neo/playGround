@@ -6,8 +6,7 @@
  */
 
 import { ParseError } from '../../errors/CBVError.js';
-import { ERROR_CODES, MAX_FILE_SIZE } from './constants.js';
-import { makeTagKey } from '../dicomDictionary.js';
+import { ERROR_CODES, MAX_FILE_SIZE, PIXEL_DATA_TAG, DICOM_MIN_FILE_SIZE } from './constants.js';
 
 /**
  * DICOM 파일에서 픽셀 데이터를 추출한다.
@@ -77,26 +76,39 @@ export function parsePixelData(buffer, metadata, pixelDataOffset, pixelDataLengt
 }
 
 /**
- * 버퍼에서 픽셀 데이터 태그(7FE0,0010)를 탐색한다.
- * @param {DataView} view
- * @param {number} bufferLength
- * @returns {number} 태그 시작 오프셋 (없으면 -1)
+ * DICOM 버퍼에서 픽셀 데이터 태그(7FE0,0010)의 오프셋을 선형 탐색한다.
+ * 정상 파싱 경로에서 오프셋을 찾지 못한 경우 호출되는 폴백 함수.
+ * 테스트 접근용으로 export됨 (프로덕션 코드에서는 parsePixelData()를 통해서만 간접 호출)
+ * @param {DataView} view - DICOM 파일의 DataView
+ * @param {number} bufferLength - 버퍼 전체 길이(바이트)
+ * @returns {number} 태그 시작 오프셋, 미발견 시 -1
+ * @trace FR-1.4, FR-2.2, NFR-1, HAZ-5.3, HAZ-1.1
  */
-function findPixelDataTag(view, bufferLength) {
-  const targetGroup = 0x7FE0;
-  const targetElement = 0x0010;
-  // 132바이트 이후부터 탐색 (Little Endian 기준, 폴백 전용)
-  for (let offset = 132; offset < bufferLength - 4; offset += 2) {
+// @private 테스트 접근용 export (프로덕션 코드에서는 직접 호출 금지)
+export function findPixelDataTag(view, bufferLength) {
+  const DICOM_PREAMBLE_SIZE = DICOM_MIN_FILE_SIZE; // 128(프리앰블) + 4(DICM 매직바이트) = 132
+  const targetGroup = PIXEL_DATA_TAG.group;    // 0x7FE0
+  const targetElement = PIXEL_DATA_TAG.element; // 0x0010
+
+  // 입력 검증: bufferLength가 프리앰블 크기 이하면 탐색 불가 (FR-009, HAZ-5.3)
+  if (bufferLength <= DICOM_PREAMBLE_SIZE) {
+    return -1;
+  }
+
+  // DICOM 태그는 항상 짝수 오프셋에 정렬되므로 2바이트 간격으로 탐색 (NFR-002)
+  // TODO-BE: Big Endian DICOM 파일 지원 시 양방향 검사 로직 추가 필요
+  for (let offset = DICOM_PREAMBLE_SIZE; offset + 4 <= bufferLength; offset += 2) {
     try {
-      // Big Endian 파일도 지원하므로 양쪽 바이트 오더로 확인
-      const groupLE = view.getUint16(offset, true);
-      const elementLE = view.getUint16(offset + 2, true);
-      if (groupLE === targetGroup && elementLE === targetElement) {
-        return offset;
+      // Little Endian(littleEndian=true)으로 group/element 읽기 (FR-005)
+      const group = view.getUint16(offset, true);
+      const element = view.getUint16(offset + 2, true);
+      if (group === targetGroup && element === targetElement) {
+        return offset; // 매치 발견 시 즉시 반환 (FR-006)
       }
     } catch (_e) {
-      break;
+      break; // DataView 읽기 예외 발생 시 루프 탈출 (FR-007, NFR-001)
     }
   }
-  return -1;
+
+  return -1; // 태그 미발견 - 호출자가 ParseError 처리 (FR-008, HAZ-1.1)
 }

@@ -259,7 +259,20 @@
 
 ---
 
-## Dependencies & Execution Order
+- [ ] **T020** 🔒 문서 업데이트 및 git commit
+  - 파일: `docs/spec-kit/03_tasks.md`, `docs/artifacts/SDS.md`
+  - 작업 내용:
+    - `03_tasks.md`의 체크리스트 항목 완료 표시 업데이트
+    - SDS.md에 SDS-3.11 `findPixelDataTag()` 구현 상태 업데이트
+    - git commit: `feat(PLAYG-1830): findPixelDataTag() 폴백 탐색 구현 및 테스트 완료`
+    - 원격 브랜치 push: `feature/PLAYG-1830-find-pixel-data-tag`
+  - 추적: PLAYG-1830
+  - 완료 조건:
+    - 원격 브랜치 push 완료
+    - SDS.md 업데이트 반영
+    - 체크리스트 완료 표시 업데이트
+
+---## Dependencies & Execution Order
 
 ```
 Phase 1 - Setup:         T001 (상수/phiStore 선언)
