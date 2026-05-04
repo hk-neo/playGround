@@ -64,6 +64,12 @@
 ## Requirements
 
 ### Functional Requirements (기능 요구사항)
+- **FR-1.4**: 시스템은 DICOM 파일에서 픽셀 데이터 태그(7FE0,0010)를 탐색하고 바이너리 복셀 데이터를 추출해야 함
+- **FR-1.5**: 시스템은 픽셀 데이터 오프셋과 길이를 메타데이터 기반으로 검증하고, 불일치 시 경고를 발생해야 함
+- **FR-2.4**: 시스템은 추출된 복셀 데이터를 ArrayBuffer 형태로 상위 모듈(parseDICOM)에 제공해야 함
+- **FR-4.5**: 시스템은 버퍼 null, 파일 크기 초과, 태그 미발견, 오프셋 범위 초과 시 구조화된 에러(ParseError)를 throw해야 함
+- **FR-5.1**: 시스템은 예상/실제 픽셀 데이터 길이 불일치 시 경고(warning)를 반환 객체에 포함해야 함
+- **FR-5.2**: 시스템은 길이 불일치 경고에 code, message, severity 필드를 포함한 구조화된 객체를 사용해야 함
 
 - **FR-001**: 시스템은 DataView와 bufferLength를 입력받아 픽셀 데이터 태그의 시작 오프셋을 반환하는 findPixelDataTag(view, bufferLength) 함수를 제공해야 한다. 함수 시그니처: findPixelDataTag(view: DataView, bufferLength: number): number (추적: FR-1.4)
 
@@ -94,6 +100,10 @@
 - **NFR-004 (확장성)**: 현재 Little Endian(true)만 검사한다. Big Endian DICOM 파일 지원 시 양방향 검사 로직 추가가 필요하다. (TODO-BE)
 
 ### Key Entities (핵심 데이터 모델)
+- **voxelData**: ArrayBuffer - 추출된 복셀 바이너리 데이터. 상위 모듈에서 TypedArray로 변환하여 렌더링에 사용
+- **warnings**: Array<{code: string, message: string, severity: string}> - 길이 불일치 등 비치명적 문제 경고 목록
+- **pixelDataOffset**: number - 버퍼 내 픽셀 데이터 시작 위치(바이트). 명시적 전달 또는 findPixelDataTag()로 탐색
+- **pixelDataLength**: number - 픽셀 데이터 길이(바이트). 명시적 전달 또는 buffer剩余 길이로 계산
 
 - **findPixelDataTag**: module-private 폴백 함수. 입력: DataView, bufferLength. 출력: 태그 오프셋(number) 또는 -1. 프리앰블 이후부터 2바이트 간격으로 선형 탐색하여 픽셀 데이터 태그(7FE0,0010)의 위치를 찾는다. export되지 않는 비공개 함수이다.
 - **PIXEL_DATA_TAG (constants.js)**: 대상 태그 식별자 상수. group: 0x7FE0, element: 0x0010. findPixelDataTag()의 탐색 대상이다.
