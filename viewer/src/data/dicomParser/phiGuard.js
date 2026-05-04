@@ -79,10 +79,13 @@ export function getPhiValue(metadata, field) {
 
 /**
  * 메타데이터에서 모든 원본 PHI 값을 일괄 조회한다.
- * @internal 디버깅/감사 로깅 전용. 프로덕션 UI에서는 사용 금지. 배럴 파일(index.js)에서 미노출.
+ * @internal 디버깅/감사 로깅 전용. 프로덕션 UI에서는 사용 금지.
+ * @warning 이 함수는 PHI_FIELDS 인가 검사 없이 모든 원본 값을 반환한다.
+ *          배럴 파일(index.js)에서 미노출. 외부 호출 시 보안 검토 필수.
+ * @security SEC-3 위반 가능성 있음. 호출부마다 코드 리뷰에서 승인 필요.
  *
  * @param {Object} metadata - 마스킹된 DICOMMetadata 객체
- * @returns {Object} 원본 PHI 필드 값 객체
+ * @returns {Object} 원본 PHI 필드 값 객체 (빈 객체일 수 있음)
  */
 export function dumpPhiValues(metadata) {
   return phiStore.get(metadata) || {};

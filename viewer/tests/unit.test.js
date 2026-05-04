@@ -948,56 +948,46 @@ describe("PHI 가드", () => {
 // ============================================================
 
 describe("SDS-3.13 getPhiValue() PHI 원본 안전조회", () => {
-  // TC-13.1: 인가 필드 patientName 원본 조회 (FR-4.1)
-  it("TC-13.1: 원본 patientName을 반환해야 한다", () => {
-    const meta = createDICOMMetadata({
+  let maskedMeta;
+
+  // TC-13.1~13.3 공통 setup: 모든 PHI 필드가 채워진 메타데이터를 마스킹
+  beforeEach(() => {
+    maskedMeta = createDICOMMetadata({
       patientName: "홍길동",
       patientID: "P001",
       patientBirthDate: "19900101",
     });
-    maskPhiFields(meta);
-    expect(getPhiValue(meta, "patientName")).toBe("홍길동");
+    maskPhiFields(maskedMeta);
+  });
+
+  // TC-13.1: 인가 필드 patientName 원본 조회 (FR-4.1)
+  it("TC-13.1: 원본 patientName을 반환해야 한다", () => {
+    expect(getPhiValue(maskedMeta, "patientName")).toBe("홍길동");
   });
 
   // TC-13.2: 인가 필드 patientID 원본 조회 (FR-4.1)
   it("TC-13.2: 원본 patientID를 반환해야 한다", () => {
-    const meta = createDICOMMetadata({
-      patientName: "홍길동",
-      patientID: "P001",
-      patientBirthDate: "19900101",
-    });
-    maskPhiFields(meta);
-    expect(getPhiValue(meta, "patientID")).toBe("P001");
+    expect(getPhiValue(maskedMeta, "patientID")).toBe("P001");
   });
 
   // TC-13.3: 인가 필드 patientBirthDate 원본 조회 (FR-4.1)
   it("TC-13.3: 원본 patientBirthDate를 반환해야 한다", () => {
-    const meta = createDICOMMetadata({
-      patientName: "홍길동",
-      patientID: "P001",
-      patientBirthDate: "19900101",
-    });
-    maskPhiFields(meta);
-    expect(getPhiValue(meta, "patientBirthDate")).toBe("19900101");
+    expect(getPhiValue(maskedMeta, "patientBirthDate")).toBe("19900101");
   });
 
   // TC-13.4: 비 PHI 필드(rows) 조회 차단 (SEC-3)
   it("TC-13.4: 비인가 필드 'rows'는 undefined를 반환해야 한다", () => {
-    const meta = createDICOMMetadata({
-      patientName: "홍길동",
-      patientID: "P001",
-    });
-    maskPhiFields(meta);
-    expect(getPhiValue(meta, "rows")).toBeUndefined();
+    expect(getPhiValue(maskedMeta, "rows")).toBeUndefined();
   });
 
   // TC-13.5: 존재하지 않는 필드 조회 차단 (SEC-3)
   it("TC-13.5: 존재하지 않는 필드 'unknownField'는 undefined를 반환해야 한다", () => {
-    const meta = createDICOMMetadata({
-      patientName: "홍길동",
-    });
-    maskPhiFields(meta);
-    expect(getPhiValue(meta, "unknownField")).toBeUndefined();
+    expect(getPhiValue(maskedMeta, "unknownField")).toBeUndefined();
+  });
+
+  // TC-13.5.1: 빈 문자열 field 파라미터 (EC-002, SEC-3)
+  it("TC-13.5.1: 빈 문자열 field는 undefined를 반환해야 한다", () => {
+    expect(getPhiValue(maskedMeta, "")).toBeUndefined();
   });
 
   // TC-13.6: 마스킹되지 않은 일반 객체 (FR-4.1)
@@ -1013,12 +1003,12 @@ describe("SDS-3.13 getPhiValue() PHI 원본 안전조회", () => {
 
   // TC-13.8: 빈 문자열 원본 (FR-4.1)
   it("TC-13.8: 빈 문자열 원본은 undefined를 반환해야 한다", () => {
-    const meta = createDICOMMetadata({
+    const metaEmpty = createDICOMMetadata({
       patientName: "",
       patientID: "",
       patientBirthDate: "",
     });
-    maskPhiFields(meta);
-    expect(getPhiValue(meta, "patientName")).toBeUndefined();
+    maskPhiFields(metaEmpty);
+    expect(getPhiValue(metaEmpty, "patientName")).toBeUndefined();
   });
 });
